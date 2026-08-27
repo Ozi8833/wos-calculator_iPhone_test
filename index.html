@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ホワサバ 差し込み計算＆マルチ行軍トラッカー (v1.05.01 βテスト版)</title>
+  <meta name="description" content="Whiteout Survival(ホワサバ) 0.1秒精度 差し込み計算＆マルチ行軍トラッカー">
+  <meta name="theme-color" content="#00f0ff">
+  
+  <!-- FontAwesome Icons & Tailwind CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css?v=1.05.01">
+</head>
+<body>
+
+  <!-- App Main Wrapper -->
+  <div id="app-container">
+
+    <!-- Title / Opening Splash Screen (v1.03.29 Standard Container Size & Decorative Frame Button Alignment) -->
+    <div id="splash-screen" onclick="this.style.display='none'; if(typeof initAudio==='function') initAudio();">
+      <div class="splash-app-container">
+        <!-- Top Title Header (Above Image Artwork) -->
+        <div class="splash-top-header mb-2">
+          <h1 class="splash-title-text">⚔️ WHITEOUT SURVIVAL</h1>
+          <p class="splash-subtitle-text">差し込み計算 ＆ シングル/同盟一斉統合モード v1.05.01 βテスト版</p>
+        </div>
+
+        <!-- Square Artwork Container -->
+        <div class="splash-image-frame">
+          <img src="splash-bg.webp" alt="Whiteout Survival 差し込み計算ツール" class="splash-art-image">
+          <!-- TAP TO START Button Aligned Over the Red Highlighted Decorative Frame (75.5% vertical) -->
+          <div class="splash-button-overlay">
+            <button id="btn-start" class="tap-to-start-btn">
+              <i class="fa-solid fa-crosshairs mr-2"></i> TAP TO START
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Header Bar (Sticky Top - v1.03.31 2-Row Top Title & Version Layout) -->
+    <header id="main-header" class="sticky-header">
+      <div class="header-top flex-col items-center gap-1.5 mb-1.5">
+        <!-- 1st Row: Title & Version Badge -->
+        <div class="brand flex items-center justify-center gap-1.5 w-full">
+          <i class="fa-solid fa-shield-halved brand-icon text-cyan-400 text-base sm:text-lg"></i>
+          <span class="font-black text-cyan-400 whitespace-nowrap text-sm sm:text-base tracking-wide">WOS 差込計算</span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black tracking-wider bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 shadow">v1.05.01 β</span>
+        </div>
+
+        <!-- 2nd Row: Action Buttons Bar -->
+        <div class="header-buttons-row flex items-center justify-center gap-1 sm:gap-1.5 w-full flex-wrap">
+          <!-- Clock Adjustment Bar Toggle Button -->
+          <button id="btn-toggle-clock-controls" class="btn-game btn-xs btn-secondary flex items-center gap-1 font-bold whitespace-nowrap" onclick="toggleClockControls()" title="時計調整エリアの表示/非表示">
+            <i id="clock-controls-icon" class="fa-solid fa-chevron-up text-cyan-400"></i> <span id="label-toggle-clock-controls">時計調整ON</span>
+          </button>
+          <!-- Floating Draggable Mini Memo Button (Top Navigation Bar) -->
+          <button id="btn-top-floating-memo" class="btn-game btn-xs btn-accent flex items-center gap-1 font-bold whitespace-nowrap shadow" onclick="toggleFloatingMemoFromCard()" title="簡易ミニメモの表示/非表示">
+            <i class="fa-solid fa-note-sticky text-yellow-300"></i> ミニメモ
+          </button>
+          <!-- Rocket Jump Button to Result Panel (Linked with setting-show-card-result) -->
+          <button id="btn-jump-result" class="btn-game btn-xs btn-accent flex items-center gap-1 font-bold shadow-lg whitespace-nowrap" onclick="jumpToResultCard()" title="計算結果画面へスクロール" style="display: none;">
+            <i class="fa-solid fa-rocket text-yellow-300"></i> 結果へ飛ぶ
+          </button>
+          <!-- Floating / Quick Strategy Note Drawer Button -->
+          <button id="btn-toggle-note" class="btn-game btn-xs bg-yellow-950/80 border border-yellow-500/50 text-yellow-300 flex items-center gap-1 font-bold whitespace-nowrap">
+            <i class="fa-solid fa-book text-yellow-300"></i> 作戦メモ
+          </button>
+          <!-- Timezone Switcher -->
+          <button id="btn-tz-toggle" class="btn-game btn-xs btn-primary font-mono whitespace-nowrap">
+            <i class="fa-solid fa-globe"></i> UTC
+          </button>
+          <!-- Settings Trigger -->
+          <button id="btn-open-settings" class="btn-game btn-xs btn-secondary whitespace-nowrap">
+            <i class="fa-solid fa-gear"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Sync Digital Clock & Timezone Indicator Badge -->
+      <div class="flex items-center justify-center gap-2 my-1">
+        <button id="tz-indicator-badge" class="px-2 py-0.5 rounded-full text-xs font-black tracking-wide border shadow-md transition-all flex items-center gap-1 bg-cyan-950/90 border-cyan-400 text-cyan-300 shadow-cyan-500/20" onclick="toggleTimezoneBadge()" title="タップで JST / UTC 切替">
+          <span>🇯🇵 JST (ローカル時間)</span>
+        </button>
+        <div id="live-clock" class="clock-display text-cyan-400">00:00:00.0</div>
+      </div>
+
+      <!-- Header Mini Launch Countdown & Launch Time Display -->
+      <div id="header-mini-launch" class="mt-1 text-xs font-bold text-yellow-300 contrast-plate px-2 py-1.5 rounded-lg border border-yellow-500/30">
+        <div class="flex items-center justify-between gap-1.5 flex-wrap text-center">
+          <div id="mini-selected-gap" class="text-xs px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/50 text-cyan-300 font-bold flex items-center gap-1">
+            🎯 <span>相手1➔相手2</span>
+          </div>
+          <div>🚀 あと <span id="mini-launch-timer" class="text-digital text-sm font-black text-yellow-300">00:00.0</span></div>
+          <div class="text-cyan-300">⏰ <span id="mini-launch-time" class="text-digital text-sm font-black text-cyan-300">--:--:--.-</span></div>
+        </div>
+        <!-- Mini Visual Progress Bar in Header -->
+        <div class="w-full bg-black/60 rounded-full h-1.5 mt-1 overflow-hidden border border-cyan-500/30 relative">
+          <div id="mini-launch-fill" class="bg-gradient-to-r from-cyan-400 via-yellow-400 to-red-500 h-full transition-all duration-100" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <!-- Collapsible Clock Adjustment Section -->
+      <div id="clock-controls-container" class="clock-controls-collapsible">
+        <!-- Time Fine-Tuning Control Bar -->
+        <div class="offset-bar safe-text">
+          <span>補正: <strong id="offset-val" class="text-cyan-300">+0.0s</strong></span>
+          <div class="flex gap-1">
+            <button class="btn-game btn-xs btn-secondary tune-btn" data-offset="-1.0">-1.0s</button>
+            <button class="btn-game btn-xs btn-secondary tune-btn" data-offset="-0.1">-0.1s</button>
+            <button class="btn-game btn-xs btn-accent tune-btn" data-offset="reset">RESET</button>
+            <button class="btn-game btn-xs btn-secondary tune-btn" data-offset="0.1">+0.1s</button>
+            <button class="btn-game btn-xs btn-secondary tune-btn" data-offset="1.0">+1.0s</button>
+          </div>
+        </div>
+
+        <!-- One-Tap Preset Seconds Sync Jump -->
+        <div class="preset-grid mt-2">
+          <button class="btn-game btn-xs btn-secondary preset-jump-btn" data-sec="00">:00s</button>
+          <button class="btn-game btn-xs btn-secondary preset-jump-btn" data-sec="10">:10s</button>
+          <button class="btn-game btn-xs btn-secondary preset-jump-btn" data-sec="20">:20s</button>
+          <button class="btn-game btn-xs btn-secondary preset-jump-btn" data-sec="30">:30s</button>
+          <button class="btn-game btn-xs btn-secondary preset-jump-btn" data-sec="40">:40s</button>
+          <button class="btn-game btn-xs btn-secondary preset-jump-btn" data-sec="50">:50s</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Operation Mode Switcher (Commented out for v1.00.25) -->
+    <!-- <div class="mode-switcher">
+      <div class="mode-tab active" id="mode-tab-live" onclick="setMode('live')">
+        <i class="fa-solid fa-tower-broadcast mr-1"></i> モードA: 2台運用<br><span class="text-xs font-normal opacity-80">(リアルタイム)</span>
+      </div>
+      <div class="mode-tab" id="mode-tab-snapshot" onclick="setMode('snapshot')">
+        <i class="fa-solid fa-camera mr-1"></i> モードB: 1台運用<br><span class="text-xs font-normal opacity-80">(UTCスナップ)</span>
+      </div>
+    </div> -->
+
+    <!-- Mode B Snapshot Base Time Input (Hidden in Mode A) -->
+    <!-- <div id="snapshot-panel" class="glass-card hidden">
+      <div class="text-sm font-bold text-yellow-400 mb-2">
+        <i class="fa-solid fa-clock-rotate-left mr-1"></i> スナップショット基準時間
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="input-group">
+          <label>基準時刻 (UTC / HH:MM:SS)</label>
+          <input type="text" id="snapshot-base-time" class="game-input text-digital" placeholder="18:30:00" value="12:00:00">
+        </div>
+        <div class="flex items-center pt-5">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="snapshot-tentative" class="w-5 h-5 accent-cyan-400">
+            <span class="text-xs font-bold text-gray-300">仮設定モード</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- My March Info Card -->
+    <div class="glass-card" id="card-my-march">
+      <div class="march-header">
+        <div class="march-title">
+          <i class="fa-solid fa-truck-fast text-cyan-400"></i> 自分の行軍設定
+        </div>
+      </div>
+      <div>
+        <div class="input-group">
+          <label>自分の行軍時間 (MM:SS)</label>
+          <input type="text" id="my-march-time" class="game-input text-digital" placeholder="01:30" value="01:30">
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode v1.02.04 Trial: Super Simple Launch Mode Card (Status Mode Toggle: Rally / March) -->
+    <div class="glass-card border-2 border-yellow-400/60 bg-yellow-950/20 my-3 shadow-xl" id="card-simple-trial">
+      <!-- Header: Title on Top, 3 Function Buttons with Help Icons on Bottom -->
+      <div class="border-b border-yellow-500/30 pb-2 mb-2.5 space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="text-xs sm:text-sm font-black text-yellow-300 flex items-center gap-1.5 whitespace-nowrap">
+            <i class="fa-solid fa-bolt text-yellow-400"></i> 【シングルモード(試作)】
+          </div>
+          <span class="text-[10px] sm:text-xs bg-yellow-500/20 text-yellow-300 font-bold px-2 py-0.5 rounded border border-yellow-400/40 whitespace-nowrap">集結 / 行軍 差し込み</span>
+        </div>
+        
+        <!-- 4 Feature Buttons Grid with ? Help Icons (v1.05.01) -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+          <div class="flex items-center bg-black/40 rounded p-0.5 border border-cyan-500/20">
+            <button id="btn-toggle-simple-sound" class="btn-game btn-xs btn-secondary flex-1 flex items-center justify-center gap-0.5 whitespace-nowrap py-1 text-[11px]" onclick="toggleSimpleAudioMute()" title="発車カウントダウン音のON/OFF">
+              <i id="icon-toggle-simple-sound" class="fa-solid fa-volume-high text-yellow-400"></i> <span id="label-toggle-simple-sound">音声ON</span>
+            </button>
+            <span class="help-icon-btn shrink-0 ml-0.5 text-[10px]" onclick="toggleHelpTooltip(event, 'simple-sound')" title="音声の説明">❓</span>
+          </div>
+
+          <div class="flex items-center bg-black/40 rounded p-0.5 border border-cyan-500/20">
+            <button id="btn-toggle-simple-vibe" class="btn-game btn-xs btn-secondary flex-1 flex items-center justify-center gap-0.5 whitespace-nowrap py-1 text-[11px]" onclick="toggleSimpleVibration()" title="発車カウントダウン振動のON/OFF">
+              <i id="icon-toggle-simple-vibe" class="fa-solid fa-mobile-screen-button text-cyan-400"></i> <span id="label-toggle-simple-vibe">バイブON</span>
+            </button>
+            <span class="help-icon-btn shrink-0 ml-0.5 text-[10px]" onclick="toggleHelpTooltip(event, 'simple-vibe')" title="バイブレーションの説明">❓</span>
+          </div>
+
+          <div class="flex items-center bg-black/40 rounded p-0.5 border border-cyan-500/20">
+            <button id="btn-toggle-simple-adjust" class="btn-game btn-xs btn-secondary flex-1 flex items-center justify-center gap-0.5 whitespace-nowrap py-1 text-[11px]" onclick="toggleSimpleAdjustButtons()" title="調整ボタンの表示/非表示">
+              <i id="icon-toggle-simple-adjust" class="fa-solid fa-sliders"></i> <span id="label-toggle-simple-adjust">時間調整ON</span>
+            </button>
+            <span class="help-icon-btn shrink-0 ml-0.5 text-[10px]" onclick="toggleHelpTooltip(event, 'simple-adjust')" title="調整ボタンの説明">❓</span>
+          </div>
+
+          <div class="flex items-center bg-black/40 rounded p-0.5 border border-cyan-500/20">
+            <button id="btn-toggle-alliance-mode" class="btn-game btn-xs btn-secondary flex-1 flex items-center justify-center gap-0.5 whitespace-nowrap py-1 text-[11px]" onclick="toggleAllianceFeature()" title="同盟一斉指示＆タイムライン機能のON/OFF">
+              <i id="icon-toggle-alliance-mode" class="fa-solid fa-users text-cyan-400"></i> <span id="label-toggle-alliance-mode">一斉指示ON</span>
+            </button>
+            <span class="help-icon-btn shrink-0 ml-0.5 text-[10px]" onclick="toggleHelpTooltip(event, 'simple-alliance')" title="同盟機能の説明">❓</span>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Mode Toggle Buttons: Rallying vs Marching -->
+      <div class="flex gap-2 mb-3 items-center">
+        <button id="btn-simple-mode-rally" class="btn-game btn-sm flex-1 font-bold btn-primary active shadow whitespace-nowrap" onclick="setSimpleStatusMode('rally')">
+          <i class="fa-solid fa-hourglass-half mr-1"></i> ⏳ 相手が集結中
+        </button>
+        <button id="btn-simple-mode-march" class="btn-game btn-sm flex-1 font-bold btn-secondary whitespace-nowrap" onclick="setSimpleStatusMode('march')">
+          <i class="fa-solid fa-person-running mr-1"></i> 🏃 相手が行軍中
+        </button>
+        <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'status-mode')" title="解説を見る">❓</span>
+      </div>
+
+      <!-- Inputs Grid (Click to open numeric keypad) -->
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <div class="input-group">
+          <label class="text-cyan-300 font-bold text-xs whitespace-nowrap">自分の行軍時間 (MM:SS) <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'my-march')" title="解説を見る">❓</span></label>
+          <input type="text" id="simple-my-march" class="game-input text-digital text-center font-bold text-cyan-300 cursor-pointer hover:border-cyan-400 transition-colors" value="01:30" placeholder="01:30" readonly onclick="openSingleInputKeypad('simple-my-march', '自分の行軍時間')">
+        </div>
+        <div class="input-group" id="group-simple-enemy-march">
+          <label class="text-yellow-300 font-bold text-xs whitespace-nowrap">相手の行軍時間 (MM:SS) <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'enemy-march')" title="解説を見る">❓</span></label>
+          <input type="text" id="simple-enemy-march" class="game-input text-digital text-center font-bold text-yellow-300 cursor-pointer hover:border-yellow-400 transition-colors" value="02:15" placeholder="02:15" readonly onclick="openSingleInputKeypad('simple-enemy-march', '相手の行軍時間')">
+        </div>
+      </div>
+
+      <!-- v1.05.01: Instant Screenshot OCR Sync & One-Tap Clipboard Paste Buttons (Located directly above remaining time) -->
+      <div class="mb-2 space-y-1.5">
+        <input type="file" id="ocr-file-input" accept="image/*" class="hidden" onchange="handleOcrImageFile(this.files[0])">
+        <div class="grid grid-cols-2 gap-2">
+          <!-- Button A: One-Tap Read from Clipboard (iPhone Shortcut / PC Copy) -->
+          <button id="btn-trigger-clipboard-sync" class="py-2.5 px-2 rounded-xl font-black text-xs sm:text-sm tracking-wide bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white border-2 border-yellow-300/90 shadow-lg shadow-yellow-500/30 flex items-center justify-center gap-1.5 transition-all transform active:scale-95" onclick="readFromClipboardDirectly()">
+            <i class="fa-solid fa-paste text-yellow-200 text-sm"></i>
+            <span>📋 クリップボード読込</span>
+          </button>
+
+          <!-- Button B: Pick Image File (Android / Screenshot Album) -->
+          <button id="btn-trigger-ocr-sync" class="py-2.5 px-2 rounded-xl font-black text-xs sm:text-sm tracking-wide bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white border-2 border-cyan-300/80 shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-1.5 transition-all transform active:scale-95" onclick="document.getElementById('ocr-file-input').click()">
+            <i class="fa-solid fa-camera text-yellow-300 text-sm"></i>
+            <span>📸 画像ファイル選択</span>
+          </button>
+        </div>
+        <div class="text-[10px] text-gray-300 text-center flex items-center justify-center gap-1 bg-black/40 py-1 rounded-lg border border-cyan-500/30">
+          <span>⚡ iPhone背面タップ後は【📋 クリップボード読込】を1タップで即解析！</span>
+          <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'ocr-sync')" title="スクショ解析の説明">❓</span>
+        </div>
+      </div>
+
+      <div class="input-group mb-2">
+        <label id="label-simple-remaining-time" class="text-yellow-300 font-bold text-xs whitespace-nowrap">相手の集結残り時間 (MM:SS) <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'enemy-rem')" title="解説を見る">❓</span></label>
+        <input type="text" id="simple-remaining-time" class="game-input text-digital text-center font-bold text-yellow-300 text-lg cursor-pointer hover:border-yellow-400 transition-colors" value="03:00" placeholder="03:00" readonly onclick="openSingleInputKeypad('simple-remaining-time', '相手の集結残り時間')">
+      </div>
+
+      <!-- Simple Trial Adjust & Sync Buttons Section (v1.02.43 Default Hidden) -->
+      <div id="simple-adjust-buttons-container" class="bg-black/40 p-2 rounded-xl border border-yellow-500/30 mb-3 hidden">
+        <!-- Direct Sync Minutes / Seconds Buttons -->
+        <div class="text-xs font-extrabold text-yellow-300 mb-1 whitespace-nowrap">🎯 残り時間 ダイレクト同期</div>
+        <div class="grid grid-cols-6 gap-1 mb-1">
+          <button class="btn-game btn-xs btn-primary font-bold whitespace-nowrap" onclick="setSimpleRemainingMinute(0)">0分</button>
+          <button class="btn-game btn-xs btn-primary font-bold whitespace-nowrap" onclick="setSimpleRemainingMinute(1)">1分</button>
+          <button class="btn-game btn-xs btn-primary font-bold whitespace-nowrap" onclick="setSimpleRemainingMinute(2)">2分</button>
+          <button class="btn-game btn-xs btn-primary font-bold whitespace-nowrap" onclick="setSimpleRemainingMinute(3)">3分</button>
+          <button class="btn-game btn-xs btn-primary font-bold whitespace-nowrap" onclick="setSimpleRemainingMinute(4)">4分</button>
+          <button class="btn-game btn-xs btn-primary font-bold whitespace-nowrap" onclick="setSimpleRemainingMinute(5)">5分</button>
+        </div>
+        <div class="grid grid-cols-6 gap-1 mb-2">
+          <button class="btn-game btn-xs btn-accent font-bold whitespace-nowrap" onclick="setSimpleRemainingSecond(0)">00s</button>
+          <button class="btn-game btn-xs btn-accent font-bold whitespace-nowrap" onclick="setSimpleRemainingSecond(10)">10s</button>
+          <button class="btn-game btn-xs btn-accent font-bold whitespace-nowrap" onclick="setSimpleRemainingSecond(20)">20s</button>
+          <button class="btn-game btn-xs btn-accent font-bold whitespace-nowrap" onclick="setSimpleRemainingSecond(30)">30s</button>
+          <button class="btn-game btn-xs btn-accent font-bold whitespace-nowrap" onclick="setSimpleRemainingSecond(40)">40s</button>
+          <button class="btn-game btn-xs btn-accent font-bold whitespace-nowrap" onclick="setSimpleRemainingSecond(50)">50s</button>
+        </div>
+
+        <!-- Fine Tuning Buttons (±1.0s / ±0.1s) -->
+        <div class="text-xs font-bold text-gray-400 mb-1 whitespace-nowrap">⏱ 秒 / コンマ秒 加算・減算</div>
+        <div class="card-fine-tune">
+          <button class="btn-game btn-xs btn-secondary font-bold whitespace-nowrap" onclick="adjustSimpleRemainingTime(-1.0)">◀ 1.0s</button>
+          <button class="btn-game btn-xs btn-secondary font-bold whitespace-nowrap" onclick="adjustSimpleRemainingTime(-0.1)">◀ 0.1s</button>
+          <button class="btn-game btn-xs btn-secondary font-bold whitespace-nowrap" onclick="adjustSimpleRemainingTime(0.1)">0.1s ▶</button>
+          <button class="btn-game btn-xs btn-secondary font-bold whitespace-nowrap" onclick="adjustSimpleRemainingTime(1.0)">1.0s ▶</button>
+        </div>
+      </div>
+
+      <!-- Big Action Button -->
+      <button id="btn-simple-enemy-start" class="btn-game btn-accent w-full py-3 text-lg font-black tracking-wider shadow-lg shadow-yellow-500/30 mb-3 whitespace-nowrap" onclick="triggerSimpleEnemyLaunch()">
+        <i class="fa-solid fa-calculator mr-1 text-xl"></i> 🎯 差し込み計算スタート！
+      </button>
+
+      <!-- Large Prominent Projected Land Time & Launch Countdown Display (v1.02.07) -->
+      <div id="simple-result-box" class="bg-black/80 p-3.5 rounded-xl border-2 border-yellow-400/80 text-center shadow-2xl">
+        <div class="text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 flex items-center justify-center gap-1 whitespace-nowrap">
+          <i class="fa-solid fa-bullseye text-yellow-400"></i> 出発予定時刻
+        </div>
+        <!-- Super Bold & Ultra Large Projected Landing Time with Timezone Badge -->
+        <div class="flex items-center justify-center gap-2 my-1 bg-yellow-950/40 p-2 rounded-lg border border-yellow-500/50 shadow-inner">
+          <button id="simple-tz-badge" class="px-2 py-0.5 rounded-full text-xs font-black tracking-wide border shadow-md transition-all flex items-center gap-1 bg-cyan-950/90 border-cyan-400 text-cyan-300 whitespace-nowrap" onclick="toggleTimezoneBadge()" title="タップで JST / UTC 切替">
+            <span>🇯🇵 JST</span>
+          </button>
+          <div id="simple-land-time-val" class="text-3xl sm:text-5xl font-black text-digital text-yellow-300 whitespace-nowrap">
+            --:--:--
+          </div>
+        </div>
+
+        <div id="simple-status-label" class="text-xs text-cyan-300 font-bold mt-2 mb-1">時間を設定して「差し込み計算スタート」を押してください</div>
+        
+        <div class="flex items-center justify-center gap-2 bg-black/60 p-2 rounded-lg border border-cyan-500/30">
+          <span class="text-xs text-gray-300 font-bold whitespace-nowrap">🚀 自分の発車まで:</span>
+          <span id="simple-countdown-val" class="text-2xl font-black text-digital text-cyan-300 whitespace-nowrap">--:--.-</span>
+        </div>
+        <div id="simple-sub-info" class="text-xs text-gray-400 font-bold mt-1">相手着弾 0.3秒後 直後に自動合わせ</div>
+
+        <!-- Forced Stop & Reset Button (v1.03.12 Default Hidden) -->
+        <button id="btn-simple-reset" class="btn-game btn-danger w-full py-2 text-sm font-black mt-2 hidden whitespace-nowrap" onclick="resetSimpleLaunchCalculation()">
+          <i class="fa-solid fa-stop-circle mr-1"></i> ⏹ 計算を強制終了 (開始時の時間に戻す)
+        </button>
+
+        <!-- Alliance Member Management & Multi Chat Copy Controls (v1.02.41 Copy Sort Mode Toggle) -->
+        <div id="group-simple-alliance-controls" class="mt-3 pt-2.5 border-t border-cyan-500/30 space-y-2">
+          <div class="flex gap-1.5 items-center">
+            <button class="btn-game btn-xs btn-secondary flex-1 py-1.5 font-bold flex items-center justify-center gap-0.5 whitespace-nowrap text-[11px] sm:text-xs" onclick="openAllianceMemberModal()">
+              <i class="fa-solid fa-user-gear text-yellow-300"></i> 👥 メンバー管理 (<span id="alliance-member-count-badge">0</span>人)
+            </button>
+            <span class="help-icon-btn shrink-0" onclick="toggleHelpTooltip(event, 'member-manage')" title="解説を見る">❓</span>
+            <button class="btn-game btn-xs btn-secondary flex-1 py-1.5 font-bold flex items-center justify-center gap-0.5 whitespace-nowrap text-[11px] sm:text-xs" onclick="openAllianceMemberSelectionModal()">
+              <i class="fa-solid fa-user-check text-cyan-300"></i> 👥 送信選択 (<span id="alliance-selected-count-badge">0</span>名)
+            </button>
+            <span class="help-icon-btn shrink-0" onclick="toggleHelpTooltip(event, 'member-select')" title="解説を見る">❓</span>
+          </div>
+
+          <!-- Copy Order Sort Mode Selection Bar -->
+          <div class="flex items-center justify-between bg-black/40 p-1.5 rounded-lg border border-yellow-500/30 text-xs">
+            <span class="text-gray-300 font-bold text-[11px] shrink-0 flex items-center"><i class="fa-solid fa-arrow-down-short-wide text-yellow-300 mr-1"></i>コピー順: <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'copy-order')" title="解説を見る">❓</span></span>
+            <div class="flex gap-1 flex-1 justify-end">
+              <button id="btn-copy-sort-name" class="btn-game btn-xs btn-primary active py-0.5 px-2 text-[11px] font-bold whitespace-nowrap" onclick="setAllianceCopySortMode('name')">
+                🔤 あいうえお順
+              </button>
+              <button id="btn-copy-sort-time" class="btn-game btn-xs btn-secondary py-0.5 px-2 text-[11px] font-bold whitespace-nowrap" onclick="setAllianceCopySortMode('time')">
+                ⏱ 出発時間順
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Batch Copy Button (Single or Auto-Split Buttons Container) -->
+          <div id="alliance-copy-buttons-container" class="space-y-1.5">
+            <button id="btn-copy-alliance-multi-chat" class="btn-game btn-sm btn-primary w-full py-2 font-black text-xs sm:text-sm tracking-wide shadow flex items-center justify-center gap-1.5 whitespace-nowrap" onclick="copyAllianceMultiChat()">
+              <i class="fa-solid fa-copy text-yellow-300"></i> <span id="label-copy-alliance-multi-chat">📋 選択メンバー全員の指示をコピー (あいうえお順)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- v1.03.00 New Feature: Alliance Departure Timeline Card -->
+    <div id="card-alliance-timeline" class="glass-card border-2 border-cyan-400/60 bg-cyan-950/20 my-3 shadow-xl">
+      <div class="flex flex-wrap items-center justify-between border-b border-cyan-500/30 pb-2 mb-2 gap-1.5">
+        <div class="text-xs sm:text-sm font-black text-cyan-300 flex items-center gap-1 min-w-0">
+          <i class="fa-solid fa-timeline text-yellow-400 shrink-0"></i>
+          <span class="truncate">⏱ 同盟一斉タイムライン (<span id="timeline-selected-count">0</span>名)</span>
+          <span class="help-icon-btn shrink-0" onclick="toggleHelpTooltip(event, 'alliance-timeline')" title="解説を見る">❓</span>
+        </div>
+        <div class="flex items-center gap-1 shrink-0 ml-auto">
+          <button id="btn-toggle-alliance-timeline" class="btn-game btn-xs btn-toggle-base btn-toggle-on flex items-center gap-0.5 whitespace-nowrap px-2 py-0.5 text-[11px] font-bold" onclick="toggleAllianceTimelineCard()" title="タイムラインの折りたたみ/展開">
+            <i id="icon-toggle-alliance-timeline" class="fa-solid fa-chevron-up text-cyan-300"></i> <span id="label-toggle-alliance-timeline">タイムラインON</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="alliance-timeline-content" class="space-y-2">
+        <div id="alliance-timeline-status-hint" class="text-xs text-yellow-300 font-bold bg-black/40 p-2 rounded-lg border border-cyan-500/30 text-center">
+          「🎯 差し込み計算スタート！」を押すとリアルタイム発車スケジュールが表示されます
+        </div>
+
+        <div id="alliance-timeline-table-container" class="max-h-72 overflow-y-auto rounded-lg border border-cyan-500/30 bg-black/50 hidden">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-cyan-950/80 sticky top-0 border-b border-cyan-500/40 text-[11px] text-cyan-300 font-bold">
+              <tr>
+                <th class="p-1.5 text-center w-8">順</th>
+                <th class="p-1.5">メンバー名</th>
+                <th class="p-1.5 text-center">行軍</th>
+                <th class="p-1.5 text-center">発車時刻</th>
+                <th class="p-1.5 text-right">最速差</th>
+              </tr>
+            </thead>
+            <tbody id="alliance-timeline-tbody" class="divide-y divide-cyan-900/40 font-mono text-[11px] text-gray-200">
+              <!-- Rendered dynamically by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enemy Section Wrapper -->
+    <div id="section-enemy-marches">
+      <!-- Dynamic Enemy March Header Bar with Add Button -->
+      <div class="px-3 my-2 flex justify-between items-center bg-black/40 p-2.5 rounded-xl border border-cyan-900/50">
+        <div class="text-sm font-bold text-cyan-400 flex items-center gap-2">
+          <i class="fa-solid fa-users-rays"></i> 相手行軍カード一覧 (<span id="march-count-badge">2</span>件)
+        </div>
+        <button id="btn-add-march" class="btn-game btn-secondary btn-sm shadow-lg shadow-cyan-500/20">
+          <i class="fa-solid fa-plus mr-1"></i> 相手追加
+        </button>
+      </div>
+
+      <!-- Dynamic Enemy March Cards Container -->
+      <div id="march-list-container">
+        <!-- March cards inserted dynamically via JS -->
+      </div>
+
+      <!-- Global Timer Controls & Big Clear All Button -->
+      <div class="px-3 my-2 flex flex-col gap-2">
+        <button id="btn-start-all" class="btn-game btn-primary w-full py-3 text-base shadow-lg shadow-cyan-500/30">
+          <i class="fa-solid fa-play mr-1"></i> 全行軍カウント一括スタート
+        </button>
+        <button id="btn-clear-all-marches" class="btn-game btn-danger w-full">
+          <i class="fa-solid fa-trash-can mr-1"></i> 相手行軍を一括消去
+        </button>
+      </div>
+    </div>
+
+    <!-- Insertion Calculation Result Card -->
+    <div class="glass-card result-card" id="result-card">
+      <div class="flex justify-between items-center mb-1">
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-widest">INSERTION WINDOW CALCULATOR</div>
+        <button id="btn-toggle-result-metrics" class="text-xs text-cyan-400 hover:text-cyan-300 font-bold bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/30 transition-all cursor-pointer" onclick="toggleResultMetrics()">
+          <i class="fa-solid fa-eye mr-1" id="icon-toggle-result-metrics"></i> <span id="label-toggle-result-metrics">詳細表示</span>
+        </button>
+      </div>
+
+      <!-- Multi-March Gap Selector Tabs -->
+      <div class="mb-3">
+        <div class="text-xs font-bold text-cyan-300 mb-1 flex items-center justify-between">
+          <span><i class="fa-solid fa-bullseye mr-1"></i> ターゲットギャップ選択</span>
+          <span class="text-gray-400 text-xs font-normal"><i class="fa-solid fa-clock mr-1 text-cyan-400"></i>⏱ 着弾が早い順</span>
+        </div>
+        <div id="gap-selector-container" class="flex flex-wrap gap-2 justify-center">
+          <!-- Dynamic Gap Tabs inserted by JS -->
+        </div>
+      </div>
+      
+      <!-- Auto Sort Warning Notice -->
+      <div id="auto-sort-notice" class="hidden text-xs text-yellow-300 font-bold bg-yellow-950/60 p-2 rounded-lg border border-yellow-500/40 mb-2">
+        <i class="fa-solid fa-circle-info mr-1"></i> 着弾順を時系列で自動整列中
+      </div>
+
+      <!-- Risk Badge -->
+      <div id="risk-badge" class="risk-badge risk-safe safe-text">
+        <i class="fa-solid fa-shield-check"></i> 🟢 安全 (着弾ギャップ 3.5s)
+      </div>
+
+      <div id="result-metrics-container" class="grid grid-cols-2 gap-2 text-left bg-black/40 p-3 rounded-xl mb-3 text-xs">
+        <div>
+          <span id="label-target-enemy1" class="text-gray-400">相手1着弾:</span>
+          <div id="res-enemy1-land" class="font-bold text-digital text-sm text-cyan-300">--:--:--.-</div>
+        </div>
+        <div>
+          <span id="label-target-enemy2" class="text-gray-400">相手2着弾:</span>
+          <div id="res-enemy2-land" class="font-bold text-digital text-sm text-cyan-300">--:--:--.-</div>
+        </div>
+        <div>
+          <span class="text-gray-400">相手着弾間隔 (ΔT):</span>
+          <div id="res-gap-delta" class="font-bold text-digital text-sm text-green-300">0.0s</div>
+        </div>
+        <div>
+          <span class="text-gray-400">発車猶予ウィンドウ:</span>
+          <div id="res-window-span" class="font-bold text-digital text-sm text-yellow-300">0.0秒間</div>
+        </div>
+      </div>
+
+      <!-- Launch Window Visual Progress Bar -->
+      <div class="mb-4 bg-black/50 p-3 rounded-xl border border-cyan-500/30">
+        <div class="flex justify-between text-xs font-bold mb-1">
+          <span class="text-cyan-300">最速発車: <span id="res-launch-min" class="text-digital">--:--:--.-</span></span>
+          <span class="text-yellow-300">推奨中央: <span id="res-launch-mid" class="text-digital">--:--:--.-</span></span>
+          <span class="text-red-400">最遅発車: <span id="res-launch-max" class="text-digital">--:--:--.-</span></span>
+        </div>
+
+        <!-- Window Visual Bar -->
+        <div class="launch-window-track relative h-4 bg-gray-800 rounded-full overflow-hidden border border-cyan-400/40 my-2">
+          <div id="launch-window-fill" class="absolute h-full bg-gradient-to-r from-cyan-500 via-yellow-400 to-red-500 rounded-full" style="left:0%; width:0%;"></div>
+        </div>
+        <div id="window-status-text" class="text-xs text-center font-bold text-green-300 mt-1">
+          🟢 発車可能時間まで あと 00分00秒
+        </div>
+      </div>
+
+      <!-- Launch Countdown -->
+      <div class="text-xs text-cyan-400 font-bold uppercase tracking-wider">最速発車までのカウントダウン</div>
+      <div id="launch-countdown" class="launch-timer safe-text">00:00.0</div>
+
+      <div class="text-sm text-gray-200 font-bold mb-3">
+        最速発車時刻: <span id="launch-scheduled-time" class="text-digital text-yellow-400 text-xl font-black ml-1">--:--:--.-</span>
+      </div>
+
+      <!-- Action Buttons (Commented out for v1.00.21, can be easily restored if needed) -->
+      <!-- <div class="flex gap-2">
+        <button id="btn-share-chat" class="btn-game btn-accent flex-1">
+          <i class="fa-solid fa-copy"></i> 同盟チャット用定型文コピー
+        </button>
+      </div> -->
+    </div>
+
+  </div> <!-- End App Container -->
+
+
+
+  <!-- Strategy Note Popup Modal Drawer -->
+  <div id="strategy-note-modal" class="modal-backdrop">
+    <div class="modal-body">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-lg font-bold text-yellow-400"><i class="fa-solid fa-note-sticky mr-2"></i> 戦術作戦メモ</h3>
+        <button class="text-gray-400 text-xl font-bold p-1" onclick="closeStrategyNoteModal()">&times;</button>
+      </div>
+      <div class="mb-3">
+        <label class="block text-xs text-gray-400 mb-1">作戦指示・ターゲット共有メモ</label>
+        <textarea id="strategy-note-text" class="game-input text-sm w-full h-40 p-3" placeholder="例: 19:05 館差し込み担当 / 敵[ABC]リーダー警戒..."></textarea>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn-game btn-sm btn-primary flex-1" onclick="saveStrategyNote()">メモを保存</button>
+        <button class="btn-game btn-sm btn-secondary" onclick="closeStrategyNoteModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Enemy Preset Picker Modal -->
+  <div id="preset-picker-modal" class="modal-backdrop">
+    <div class="modal-body" style="max-height: 80vh; display: flex; flex-direction: column;">
+      <div class="flex justify-between items-center mb-2 border-b border-cyan-500/30 pb-2">
+        <h3 class="text-lg font-bold text-cyan-300"><i class="fa-solid fa-folder-open mr-2 text-yellow-400"></i> 敵プリセット選択 ＆ 整理</h3>
+        <button class="text-gray-400 text-xl font-bold p-1" onclick="closePresetPickerModal()">&times;</button>
+      </div>
+
+      <!-- Preset Sort Control Bar -->
+      <div class="flex items-center justify-between gap-1 mb-2 bg-black/40 p-1.5 rounded-lg border border-cyan-500/20">
+        <span class="text-xs text-gray-400 font-bold ml-1">並び替え:</span>
+        <div class="flex gap-1">
+          <button id="preset-sort-recent" class="btn-game btn-xs btn-primary preset-sort-btn active" onclick="setPresetSortMode('recent')">
+            <i class="fa-solid fa-clock-rotate-left"></i> 登録順
+          </button>
+          <button id="preset-sort-tag" class="btn-game btn-xs btn-secondary preset-sort-btn" onclick="setPresetSortMode('tag')">
+            <i class="fa-solid fa-tag"></i> 同盟順
+          </button>
+          <button id="preset-sort-name" class="btn-game btn-xs btn-secondary preset-sort-btn" onclick="setPresetSortMode('name')">
+            <i class="fa-solid fa-user"></i> 領主名順
+          </button>
+        </div>
+      </div>
+
+      <div class="text-xs text-gray-400 mb-2">
+        項目のタップで選択反映 / 右の <i class="fa-solid fa-trash-can text-red-400"></i> で一発削除できます
+      </div>
+      <div id="preset-picker-list" class="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 mb-3">
+        <!-- Dynamic Preset Items inserted by JS -->
+      </div>
+      <div class="flex justify-end">
+        <button class="btn-game btn-sm btn-secondary" onclick="closePresetPickerModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Bottom Navigation Bar -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="scrollToTop()">
+      <i class="fa-solid fa-crosshairs text-lg"></i>
+      <span>トラッカー</span>
+    </button>
+    <button class="nav-item" id="btn-open-calc">
+      <i class="fa-solid fa-calculator text-lg"></i>
+      <span>電卓</span>
+    </button>
+    <button class="nav-item" id="btn-open-history">
+      <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+      <span>敵情報履歴</span>
+    </button>
+    <button class="nav-item" onclick="openSettingsModal()">
+      <i class="fa-solid fa-sliders text-lg"></i>
+      <span>設定</span>
+    </button>
+  </nav>
+
+  <!-- Triple Mode Calculator Modal (v1.04.08: Normal / Time Calc / Time Converter / Speedup Optimizer) -->
+  <div id="calc-modal" class="modal-backdrop">
+    <div class="modal-body max-w-md">
+      <!-- Top Tab Switchers (Strict 1-Row Grid Layout for Mobile & PC) -->
+      <div class="flex items-center justify-between gap-1 mb-2.5">
+        <div class="grid grid-cols-4 gap-1 flex-1">
+          <button id="calc-tab-time" class="btn-game btn-xs btn-primary font-bold px-1 py-1 text-[11px] sm:text-xs whitespace-nowrap" onclick="switchCalcTab('time')">⏱️ 時間計算</button>
+          <button id="calc-tab-converter" class="btn-game btn-xs btn-secondary font-bold px-1 py-1 text-[11px] sm:text-xs whitespace-nowrap" onclick="switchCalcTab('converter')">🔄 相互変換</button>
+          <button id="calc-tab-speedup" class="btn-game btn-xs btn-secondary font-bold px-1 py-1 text-[11px] sm:text-xs text-yellow-300 whitespace-nowrap" onclick="switchCalcTab('speedup')">⚡️ 加速計算</button>
+          <button id="calc-tab-normal" class="btn-game btn-xs btn-secondary font-bold px-1 py-1 text-[11px] sm:text-xs whitespace-nowrap" onclick="switchCalcTab('normal')">🔢 通常電卓</button>
+        </div>
+        <button class="text-gray-400 text-xl font-bold p-1 hover:text-white shrink-0 ml-1 leading-none" onclick="closeCalcModal()" title="電卓を閉じる">&times;</button>
+      </div>
+
+      <!-- Quick Action Buttons for Time Calculation (Currently active in Time mode) -->
+      <div id="calc-time-shortcuts" class="mb-2 space-y-1.5">
+        <!-- 1st Row: Current Time Injection & Insertion Transfer Targets -->
+        <div class="flex items-center gap-1.5 flex-wrap justify-between">
+          <div class="flex items-center gap-1">
+            <button class="btn-game btn-xs bg-yellow-950/90 border border-yellow-500/70 text-yellow-300 font-bold px-2 py-1 text-xs" onclick="insertCurrentTimeIntoCalc()" title="現在のリアルタイム(UTC/JST)を代入">
+              <i class="fa-solid fa-clock mr-1"></i> 現在時刻代入
+            </button>
+            <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'calc-now')" title="機能の説明">❓</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button class="btn-game btn-xs bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[11px] font-bold px-1.5 py-1" onclick="transferCalcResultToSimple('my')" title="計算結果を自分の行軍時間に反映">
+              📤 自分へ
+            </button>
+            <button class="btn-game btn-xs bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[11px] font-bold px-1.5 py-1" onclick="transferCalcResultToSimple('enemy')" title="計算結果を相手の行軍時間に反映">
+              📤 相手へ
+            </button>
+            <button class="btn-game btn-xs bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[11px] font-bold px-1.5 py-1" onclick="transferCalcResultToSimple('rem')" title="計算結果を残り時間に反映">
+              📤 残りへ
+            </button>
+            <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'calc-transfer')" title="転送の説明">❓</span>
+          </div>
+        </div>
+
+        <!-- 2nd Row: WOS Quick Preset Stepper Slot Buttons (Tactile 3D Buttons with Neon Borders) -->
+        <div class="grid grid-cols-5 gap-1.5 text-center">
+          <button class="btn-game btn-xs bg-gradient-to-b from-gray-800 to-gray-950 border border-yellow-500/60 text-yellow-300 font-bold py-1.5 text-[11px] shadow-sm hover:border-yellow-400 active:scale-95 transition-all" onclick="appendCalcTimeShortcut(300)" title="5分（集結時間）を加算">+5分</button>
+          <button class="btn-game btn-xs bg-gradient-to-b from-gray-800 to-gray-950 border border-yellow-500/60 text-yellow-300 font-bold py-1.5 text-[11px] shadow-sm hover:border-yellow-400 active:scale-95 transition-all" onclick="appendCalcTimeShortcut(60)" title="1分を加算">+1分</button>
+          <button class="btn-game btn-xs bg-gradient-to-b from-gray-800 to-gray-950 border border-cyan-500/60 text-cyan-300 font-bold py-1.5 text-[11px] shadow-sm hover:border-cyan-400 active:scale-95 transition-all" onclick="appendCalcTimeShortcut(30)" title="30秒を加算">+30秒</button>
+          <button class="btn-game btn-xs bg-gradient-to-b from-gray-800 to-gray-950 border border-green-500/60 text-green-300 font-bold py-1.5 text-[11px] shadow-sm hover:border-green-400 active:scale-95 transition-all" onclick="appendCalcTimeShortcut(0.3)" title="差し込みマージン +0.3秒を加算">+0.3秒</button>
+          <button class="btn-game btn-xs bg-gradient-to-b from-gray-800 to-gray-950 border border-red-500/60 text-red-300 font-bold py-1.5 text-[11px] shadow-sm hover:border-red-400 active:scale-95 transition-all" onclick="appendCalcTimeShortcut(-0.3)" title="差し込みマージン -0.3秒を減算">-0.3秒</button>
+        </div>
+      </div>
+
+      <!-- Calculator Display Box -->
+      <div id="calc-display-container" class="relative">
+        <div class="flex justify-between items-center px-1 mb-1">
+          <span class="text-[11px] text-gray-400 font-bold flex items-center gap-1">
+            <span id="calc-display-title">⏱️ 時間計算 入力式</span>
+            <span id="calc-display-help-btn" class="help-icon-btn" onclick="toggleHelpTooltip(event, 'calc-keypad-time')" title="入力方法の解説を見る">❓</span>
+          </span>
+          <span id="calc-display-subhint" class="text-[10px] text-cyan-400 font-mono">コロン(:)で時分秒計算</span>
+        </div>
+        <div id="calc-display" class="calc-display safe-text">0</div>
+        <!-- Smart Assistant Badge for Auto Rollover (e.g. 64秒 => 1分04秒) -->
+        <div id="calc-display-hint" class="text-right text-[11px] font-mono text-yellow-400/90 -mt-2.5 mb-2 h-4 pr-1"></div>
+      </div>
+
+      <!-- Calculator Keypad Container -->
+      <div id="calc-keypad" class="calc-grid">
+        <!-- Keypad rendered dynamically by JS -->
+      </div>
+
+      <!-- Tab 2: Time Converter Dedicated Panel (Active when 'converter' tab selected) -->
+      <div id="calc-converter-panel" class="hidden space-y-2 mt-2">
+        <div class="bg-black/60 p-2.5 rounded-lg border border-cyan-500/40 space-y-2">
+          <div class="flex justify-between items-center text-xs text-gray-300">
+            <div class="flex items-center gap-1">
+              <span class="font-bold text-yellow-300">🔄 リアルタイム相互変換結果</span>
+              <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'calc-converter')" title="相互変換の説明">❓</span>
+            </div>
+            <span class="text-[10px] text-gray-400">（各行から選んでコピー / 時間計算へ代入）</span>
+          </div>
+
+          <!-- Result Row A: 時分秒形式 -->
+          <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex flex-col gap-1.5">
+            <div class="flex justify-between items-center">
+              <div class="text-[10px] text-gray-400 font-bold">① 時・分・秒 形式</div>
+              <div id="conv-res-hms" class="text-sm font-black font-mono text-cyan-300">0時間0分0秒</div>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 pt-0.5">
+              <button class="btn-game btn-xs btn-secondary py-1 text-[11px] font-bold" onclick="copyConverterValue('hms')">📋 コピー</button>
+              <button class="btn-game btn-xs bg-cyan-950/90 border border-cyan-500/60 text-cyan-300 font-bold py-1 text-[11px] shadow-sm hover:border-cyan-400 active:scale-95" onclick="transferConverterToTimeCalc('hms')" title="時:分:秒 形式で時間計算へ代入">⏱️ 時間計算へ</button>
+            </div>
+          </div>
+
+          <!-- Result Row B: 分秒形式（時間なし） - 4 Button Full Width Grid -->
+          <div class="bg-gray-900/80 p-2 rounded border border-yellow-500/30 flex flex-col gap-1.5">
+            <div class="flex justify-between items-center">
+              <div class="text-[10px] text-yellow-400/90 font-bold">② 分・秒 形式 (時間なし)</div>
+              <div id="conv-res-ms" class="text-sm font-black font-mono text-yellow-300">0分0秒 (00:00)</div>
+            </div>
+            <div class="grid grid-cols-4 gap-1 pt-0.5">
+              <button class="btn-game btn-xs btn-secondary py-1 text-[11px] font-bold whitespace-nowrap" onclick="copyConverterValue('ms')">📋 コピー</button>
+              <button class="btn-game btn-xs bg-cyan-950/90 border border-cyan-500/60 text-cyan-300 font-bold py-1 text-[11px] whitespace-nowrap shadow-sm hover:border-cyan-400 active:scale-95" onclick="transferConverterToTimeCalc('ms')" title="分:秒 形式で時間計算へ代入">⏱️ 時間計算</button>
+              <button class="btn-game btn-xs btn-accent py-1 text-[11px] font-bold whitespace-nowrap" onclick="transferConverterToSimple('my')">📤 自分</button>
+              <button class="btn-game btn-xs btn-accent py-1 text-[11px] font-bold whitespace-nowrap" onclick="transferConverterToSimple('enemy')">📤 相手</button>
+            </div>
+          </div>
+
+          <!-- Result Row C: 総秒数形式 -->
+          <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex flex-col gap-1.5">
+            <div class="flex justify-between items-center">
+              <div class="text-[10px] text-gray-400 font-bold">③ 総秒数 形式 (秒換算)</div>
+              <div id="conv-res-sec" class="text-sm font-black font-mono text-green-300">0 秒</div>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 pt-0.5">
+              <button class="btn-game btn-xs btn-secondary py-1 text-[11px] font-bold" onclick="copyConverterValue('sec')">📋 コピー</button>
+              <button class="btn-game btn-xs bg-cyan-950/90 border border-cyan-500/60 text-cyan-300 font-bold py-1 text-[11px] shadow-sm hover:border-cyan-400 active:scale-95" onclick="transferConverterToTimeCalc('sec')" title="総秒数で時間計算へ代入">⏱️ 時間計算へ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Dedicated WOS Speedup Items Optimizer Panel (Active when 'speedup' tab selected) -->
+      <div id="calc-speedup-panel" class="hidden space-y-2 mt-2">
+        <div class="bg-black/70 p-2.5 rounded-lg border border-yellow-500/40 space-y-2">
+          <div class="flex justify-between items-center text-xs">
+            <div class="flex items-center gap-1">
+              <span class="font-bold text-yellow-300 flex items-center gap-1">
+                <i class="fa-solid fa-bolt-lightning text-yellow-400"></i> ホワサバ時間加速 必要個数
+              </span>
+              <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'calc-speedup')" title="加速計算の説明">❓</span>
+            </div>
+            <button class="btn-game btn-xs bg-yellow-950 border border-yellow-500/50 text-yellow-300 font-bold px-2 py-0.5 text-[11px]" onclick="copySpeedupOptimizationResult()">
+              📋 加速内訳をコピー
+            </button>
+          </div>
+
+          <!-- Speedup Selection Filters -->
+          <div class="bg-gray-950/80 p-2 rounded border border-gray-800">
+            <div class="text-[10px] text-gray-400 font-bold mb-1.5 flex items-center justify-between">
+              <span>使用する加速アイテムを選択 (ON/OFF):</span>
+              <span class="text-cyan-400 text-[10px]">即座に最適再計算</span>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5 text-center text-xs font-bold">
+              <label class="flex items-center justify-center gap-1 bg-yellow-950/40 border border-yellow-500/40 p-1 rounded cursor-pointer select-none">
+                <input type="checkbox" id="speedup-use-8h" class="w-3.5 h-3.5 accent-yellow-400" checked onchange="updateSpeedupOptimizer()">
+                <span class="text-yellow-300 text-[11px]">8時間</span>
+              </label>
+              <label class="flex items-center justify-center gap-1 bg-cyan-950/40 border border-cyan-500/40 p-1 rounded cursor-pointer select-none">
+                <input type="checkbox" id="speedup-use-1h" class="w-3.5 h-3.5 accent-cyan-400" checked onchange="updateSpeedupOptimizer()">
+                <span class="text-cyan-300 text-[11px]">1時間</span>
+              </label>
+              <label class="flex items-center justify-center gap-1 bg-green-950/40 border border-green-500/40 p-1 rounded cursor-pointer select-none">
+                <input type="checkbox" id="speedup-use-5m" class="w-3.5 h-3.5 accent-green-400" checked onchange="updateSpeedupOptimizer()">
+                <span class="text-green-300 text-[11px]">5分</span>
+              </label>
+              <label class="flex items-center justify-center gap-1 bg-gray-800/60 border border-gray-600/40 p-1 rounded cursor-pointer select-none">
+                <input type="checkbox" id="speedup-use-1m" class="w-3.5 h-3.5 accent-blue-400" checked onchange="updateSpeedupOptimizer()">
+                <span class="text-gray-200 text-[11px]">1分</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Optimal Mix Summary -->
+          <div class="bg-gray-900/90 p-2 rounded border border-yellow-500/30">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-[11px] font-bold text-yellow-300">✨ 選択加速の最適組み合わせ (最小個数)</span>
+              <span id="speedup-total-count" class="text-xs font-black text-cyan-300">合計 0 個</span>
+            </div>
+            <div class="grid grid-cols-4 gap-1 text-center font-mono text-xs">
+              <div class="bg-black/60 p-1 rounded border border-yellow-500/20">
+                <div class="text-[9px] text-yellow-400">8時間</div>
+                <div id="speedup-count-8h" class="font-bold text-yellow-300 text-sm">0</div>
+              </div>
+              <div class="bg-black/60 p-1 rounded border border-cyan-500/20">
+                <div class="text-[9px] text-cyan-400">1時間</div>
+                <div id="speedup-count-1h" class="font-bold text-cyan-300 text-sm">0</div>
+              </div>
+              <div class="bg-black/60 p-1 rounded border border-green-500/20">
+                <div class="text-[9px] text-green-400">5分</div>
+                <div id="speedup-count-5m" class="font-bold text-green-300 text-sm">0</div>
+              </div>
+              <div class="bg-black/60 p-1 rounded border border-gray-700">
+                <div class="text-[9px] text-gray-400">1分</div>
+                <div id="speedup-count-1m" class="font-bold text-gray-200 text-sm">0</div>
+              </div>
+            </div>
+            <div id="speedup-rem-note" class="text-[10px] text-gray-400 text-right mt-1 font-mono">余り: 0秒</div>
+          </div>
+
+          <!-- Single Item Requirements Breakdown (v1.03.47 Clean 2-Row Layout) -->
+          <div class="bg-gray-900/60 p-2 rounded border border-gray-800 space-y-1">
+            <div class="text-[10px] font-bold text-gray-400">🎯 単独使用時の必要個数 (各アイテム単体で加速した場合)</div>
+            <div class="grid grid-cols-2 gap-1.5 text-xs font-mono">
+              <!-- 8 Hours Card -->
+              <div class="bg-black/50 p-1.5 rounded border border-gray-800 flex flex-col justify-between">
+                <div class="flex justify-between items-center">
+                  <span class="text-yellow-400 text-[11px] font-bold">8時間加速だけ:</span>
+                  <span id="speedup-single-8h-num" class="font-bold text-yellow-300 text-sm">0個</span>
+                </div>
+                <div id="speedup-single-8h-status" class="text-[10px] text-right mt-0.5"></div>
+              </div>
+
+              <!-- 1 Hour Card -->
+              <div class="bg-black/50 p-1.5 rounded border border-gray-800 flex flex-col justify-between">
+                <div class="flex justify-between items-center">
+                  <span class="text-cyan-400 text-[11px] font-bold">1時間加速だけ:</span>
+                  <span id="speedup-single-1h-num" class="font-bold text-cyan-300 text-sm">0個</span>
+                </div>
+                <div id="speedup-single-1h-status" class="text-[10px] text-right mt-0.5"></div>
+              </div>
+
+              <!-- 5 Min Card -->
+              <div class="bg-black/50 p-1.5 rounded border border-gray-800 flex flex-col justify-between">
+                <div class="flex justify-between items-center">
+                  <span class="text-green-400 text-[11px] font-bold">5分加速だけ:</span>
+                  <span id="speedup-single-5m-num" class="font-bold text-green-300 text-sm">0個</span>
+                </div>
+                <div id="speedup-single-5m-status" class="text-[10px] text-right mt-0.5"></div>
+              </div>
+
+              <!-- 1 Min Card -->
+              <div class="bg-black/50 p-1.5 rounded border border-gray-800 flex flex-col justify-between">
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-300 text-[11px] font-bold">1分加速だけ:</span>
+                  <span id="speedup-single-1m-num" class="font-bold text-gray-200 text-sm">0個</span>
+                </div>
+                <div id="speedup-single-1m-status" class="text-[10px] text-right mt-0.5"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time Calculator History & Memo Panel -->
+      <div id="calc-history-panel" class="calc-history-box mt-3">
+        <div class="flex justify-between items-center mb-1.5">
+          <div class="flex items-center gap-1">
+            <span class="font-bold text-yellow-400 text-xs"><i class="fa-solid fa-clock-rotate-left mr-1"></i> 計算履歴 ＆ メモ</span>
+            <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'calc-history')" title="履歴・メモ・再利用・反映の解説を見る">❓</span>
+          </div>
+          <button class="text-gray-400 text-xs hover:text-red-400" onclick="clearCalcHistory()">履歴消去</button>
+        </div>
+        <div id="calc-history-list">
+          <div class="text-gray-500 text-xs text-center py-2">計算履歴はありません</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Modal -->
+  <div id="history-modal" class="modal-backdrop">
+    <div class="modal-body">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-lg font-bold text-cyan-400"><i class="fa-solid fa-clock-rotate-left mr-2"></i> 敵情報履歴</h3>
+        <button class="text-gray-400 text-xl font-bold p-1" onclick="closeHistoryModal()">&times;</button>
+      </div>
+      <div id="history-list" class="space-y-2 max-h-80 overflow-y-auto">
+        <!-- History items -->
+      </div>
+      <button id="btn-clear-history" class="btn-game btn-sm btn-danger w-full mt-4">履歴を消去</button>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal-backdrop">
+    <div class="modal-body">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-cyan-400"><i class="fa-solid fa-gear mr-2"></i> アプリ設定 (v1.05.01 βテスト版)</h3>
+        <button class="text-gray-400 text-xl font-bold p-1" onclick="closeSettingsModal()">&times;</button>
+      </div>
+
+      <div class="space-y-4 text-sm">
+        <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+          <span>起動時のタイトル画面をスキップ</span>
+          <input type="checkbox" id="setting-skip-splash" class="w-5 h-5 accent-cyan-400">
+        </div>
+
+        <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+          <span>ヘッダー位置固定 (Sticky)</span>
+          <input type="checkbox" id="setting-sticky-header" class="w-5 h-5 accent-cyan-400" checked>
+        </div>
+
+        <!-- Button ON/OFF Style Presets (Neon / Emerald / Gold) -->
+        <div class="border-b border-gray-700 pb-3">
+          <label class="block font-bold mb-1.5 text-cyan-300">🔘 ボタンON/OFFデザイン切替</label>
+          <div class="grid grid-cols-3 gap-1.5 mb-1">
+            <button id="btn-theme-opt-neon" class="btn-game btn-xs border border-cyan-400 text-cyan-300 font-black py-1.5 text-center flex flex-col items-center justify-center gap-0.5 rounded-lg bg-cyan-950/90" onclick="setButtonTheme('neon')">
+              <span class="text-xs">パターン 1</span>
+              <span class="text-[10px] text-gray-300">ネオンシアン</span>
+            </button>
+            <button id="btn-theme-opt-emerald" class="btn-game btn-xs border border-emerald-400 text-emerald-300 font-black py-1.5 text-center flex flex-col items-center justify-center gap-0.5 rounded-lg bg-emerald-950/90" onclick="setButtonTheme('emerald')">
+              <span class="text-xs">パターン 2</span>
+              <span class="text-[10px] text-gray-300">エメラルド</span>
+            </button>
+            <button id="btn-theme-opt-gold" class="btn-game btn-xs border border-yellow-400 text-yellow-300 font-black py-1.5 text-center flex flex-col items-center justify-center gap-0.5 rounded-lg bg-yellow-950/90" onclick="setButtonTheme('gold')">
+              <span class="text-xs">パターン 3</span>
+              <span class="text-[10px] text-gray-300">ゴールド</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+          <div>
+            <div class="font-bold text-cyan-300">👥 同盟チャット・タイムライン機能</div>
+            <div class="text-xs text-gray-400">同盟一斉発車指示やタイムラインの表示/非表示</div>
+          </div>
+          <input type="checkbox" id="setting-show-alliance-features" class="w-5 h-5 accent-cyan-400" checked onchange="setAllianceFeatureVisible(this.checked)">
+        </div>
+
+        <!-- Unused Setting (Preserved for Future Release)
+        <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+          <span>結果カードの詳細数値4項目を表示</span>
+          <input type="checkbox" id="setting-show-result-metrics" class="w-5 h-5 accent-cyan-400" checked>
+        </div>
+        -->
+
+        <!-- Card Visibility Toggle Section (Preserved for Future Release)
+        <div class="bg-black/50 p-3 rounded-xl border border-cyan-500/30 space-y-2 mt-3">
+          <div class="text-xs font-bold text-cyan-300 mb-1 flex items-center gap-1">
+            <i class="fa-solid fa-eye mr-1"></i> 画面カードの表示 / 非表示 設定
+          </div>
+          <div class="flex justify-between items-center text-xs border-b border-gray-800 pb-1.5">
+            <span>ヘッダー下のミニ差込案内バー</span>
+            <input type="checkbox" id="setting-show-card-header-mini" class="w-4 h-4 accent-cyan-400" onchange="toggleCardVisibility('header-mini', this.checked)">
+          </div>
+          <div class="flex justify-between items-center text-xs border-b border-gray-800 pb-1.5">
+            <span>自分の行軍設定カード</span>
+            <input type="checkbox" id="setting-show-card-my-march" class="w-4 h-4 accent-cyan-400" onchange="toggleCardVisibility('my-march', this.checked)">
+          </div>
+          <div class="flex justify-between items-center text-xs border-b border-gray-800 pb-1.5">
+            <span>相手行軍カード一覧</span>
+            <input type="checkbox" id="setting-show-card-enemy-list" class="w-4 h-4 accent-cyan-400" onchange="toggleCardVisibility('enemy-list', this.checked)">
+          </div>
+          <div class="flex justify-between items-center text-xs border-b border-gray-800 pb-1.5">
+            <span>従来の詳細結果カード</span>
+            <input type="checkbox" id="setting-show-card-result" class="w-4 h-4 accent-cyan-400" onchange="toggleCardVisibility('result', this.checked)">
+          </div>
+          <div class="flex justify-between items-center text-xs border-b border-gray-800 pb-1.5">
+            <span class="text-yellow-300 font-bold">【シングルモード(試作)】</span>
+            <input type="checkbox" id="setting-show-card-simple" class="w-4 h-4 accent-yellow-400" checked onchange="toggleCardVisibility('simple', this.checked)">
+          </div>
+          <div class="flex justify-between items-center text-xs border-b border-gray-800 pb-1.5">
+            <span class="text-yellow-200">└ 試作カードの案内・補足テキスト</span>
+            <input type="checkbox" id="setting-show-card-simple-sub-info" class="w-4 h-4 accent-yellow-400" onchange="toggleCardVisibility('simple-sub-info', this.checked)">
+          </div>
+          <div class="flex justify-between items-center text-xs pt-0.5">
+            <span class="text-cyan-300 font-bold">📝 浮遊ミニメモ・コンソール (ドラッグ可能)</span>
+            <input type="checkbox" id="setting-show-card-floating-memo" class="w-4 h-4 accent-cyan-400" onchange="toggleCardVisibility('floating-memo', this.checked)">
+          </div>
+        </div>
+        -->
+
+        <!-- Theme Selector & Custom Colors (Preserved for Future Release)
+        <div class="border-b border-gray-700 pb-3">
+          <label class="block font-bold mb-2 text-cyan-300">🎨 テーマプリセット (全6種)</label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <button class="preset-theme-btn" style="background:#080c14; color:#00f0ff;" onclick="applyPresetTheme('cyber')">
+              <span>1. ネオンサイバー</span>
+              <div class="color-dots"><span class="color-dot" style="background:#080c14;"></span><span class="color-dot" style="background:#00f0ff;"></span></div>
+            </button>
+            <button class="preset-theme-btn" style="background:#1a0508; color:#ff3b5c;" onclick="applyPresetTheme('magma')">
+              <span>2. マグマレッド</span>
+              <div class="color-dots"><span class="color-dot" style="background:#1a0508;"></span><span class="color-dot" style="background:#ff3b5c;"></span></div>
+            </button>
+            <button class="preset-theme-btn" style="background:#05140b; color:#00ff88;" onclick="applyPresetTheme('tactical')">
+              <span>3. タクティカル</span>
+              <div class="color-dots"><span class="color-dot" style="background:#05140b;"></span><span class="color-dot" style="background:#00ff88;"></span></div>
+            </button>
+            <button class="preset-theme-btn" style="background:#12071a; color:#ffb700;" onclick="applyPresetTheme('royal')">
+              <span>4. ロイヤルゴールド</span>
+              <div class="color-dots"><span class="color-dot" style="background:#12071a;"></span><span class="color-dot" style="background:#ffb700;"></span></div>
+            </button>
+            <button class="preset-theme-btn" style="background:#0a1220; color:#38bdf8;" onclick="applyPresetTheme('frost')">
+              <span>5. フロストアイス</span>
+              <div class="color-dots"><span class="color-dot" style="background:#0a1220;"></span><span class="color-dot" style="background:#38bdf8;"></span></div>
+            </button>
+            <button class="preset-theme-btn" style="background:#f1f5f9; color:#0284c7;" onclick="applyPresetTheme('light')">
+              <span style="color:#0f172a;">6. ハイコントラスト</span>
+              <div class="color-dots"><span class="color-dot" style="background:#f1f5f9;"></span><span class="color-dot" style="background:#0284c7;"></span></div>
+            </button>
+          </div>
+        </div>
+
+        <div class="border-b border-gray-700 pb-3">
+          <label class="block font-bold mb-2">カスタム背景・カラー手動設定</label>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-xs text-gray-400">背景色</label>
+              <input type="color" id="theme-bg" value="#080c14" class="w-full h-8 rounded cursor-pointer">
+            </div>
+            <div>
+              <label class="text-xs text-gray-400">アクセント</label>
+              <input type="color" id="theme-accent" value="#00f0ff" class="w-full h-8 rounded cursor-pointer">
+            </div>
+            <div>
+              <label class="text-xs text-gray-400">文字色</label>
+              <input type="color" id="theme-text" value="#e6f1ff" class="w-full h-8 rounded cursor-pointer">
+            </div>
+          </div>
+        </div>
+        -->
+
+        <!-- Background Image Setting (Preserved for Future Release)
+        <div>
+          <label class="block font-bold mb-1">背景画像URL</label>
+          <div class="flex gap-2">
+            <input type="text" id="bg-url-input" class="game-input text-xs flex-1" placeholder="画像URLを指定...">
+            <button id="btn-reset-bg" class="btn-game btn-xs btn-secondary">初期化</button>
+          </div>
+        </div>
+        -->
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Draggable Mini Memo Window (v1.02.29 Mobile & Initial Position Fix) -->
+  <div id="floating-memo-window" class="fixed z-[9999] bg-black/95 backdrop-blur-md border-2 border-cyan-400/90 rounded-xl shadow-2xl p-3 w-72 sm:w-80 text-xs transition-shadow cursor-move select-none" style="top: 140px; left: 16px; display: none;">
+    <!-- Drag Handle Header (touch-action: none for iOS & Android drag scrolling prevention) -->
+    <div id="floating-memo-header" class="flex items-center justify-between border-b border-cyan-500/40 pb-1.5 mb-2 cursor-grab active:cursor-grabbing touch-none" style="touch-action: none;">
+      <div class="font-black text-cyan-300 flex items-center gap-1.5">
+        <i class="fa-solid fa-grip-vertical text-cyan-400"></i>
+        <span>📝 簡易ミニメモ</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button id="btn-toggle-floating-land-time" class="btn-game btn-xs bg-yellow-950/80 border border-yellow-500/50 text-yellow-300 px-1.5 py-0.5 text-[11px]" onclick="toggleFloatingMemoLandTime()" title="出発時刻表示の切替">🎯 出発時刻</button>
+        <button id="btn-toggle-floating-body" class="text-gray-400 hover:text-cyan-300 px-1 text-sm font-bold" onclick="toggleFloatingMemoBody()" title="最小化/展開">&minus;</button>
+        <button class="text-gray-400 hover:text-red-400 px-1 text-sm font-bold" onclick="toggleCardVisibility('floating-memo', false); const cb = document.getElementById('setting-show-card-floating-memo'); if(cb) cb.checked = false;">&times;</button>
+      </div>
+    </div>
+    <!-- Window Body -->
+    <div id="floating-memo-body" class="space-y-2">
+      <!-- Live Sync Target Launch Time in Mini Window -->
+      <div id="floating-land-time-box" class="bg-yellow-950/40 p-2 rounded-lg border border-yellow-500/40 text-center">
+        <div class="text-[11px] text-yellow-300 font-bold">🎯 自分の出発予定時刻</div>
+        <div class="flex items-center justify-center gap-1.5 mt-0.5">
+          <span id="floating-tz-badge" class="text-xs px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-400 text-cyan-300 font-bold">🇯🇵 JST</span>
+          <span id="floating-land-time-val" class="text-lg sm:text-xl font-black text-digital text-yellow-300">--:--:--</span>
+        </div>
+      </div>
+      <!-- Free Note Area -->
+      <div>
+        <textarea id="floating-memo-textarea" class="w-full bg-black/70 border border-cyan-500/40 rounded-lg p-2 text-cyan-100 text-sm focus:outline-none focus:border-cyan-400 resize-y font-mono leading-relaxed" rows="5" placeholder="メモを入力... (相手主力タイムや作戦方針など)" oninput="saveFloatingMemoText(this.value)"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alliance Member Management Modal (v1.04.00 Group & Search & Quick Input) -->
+  <div id="alliance-member-modal" class="modal-backdrop">
+    <div class="modal-body max-w-lg">
+      <!-- Modal Header (2-Row Clean Layout for 100% Mobile Safety) -->
+      <div class="mb-2 pb-2 border-b border-gray-700/60 space-y-1.5">
+        <div class="flex justify-between items-center">
+          <h3 class="text-sm sm:text-base font-bold text-cyan-400 flex items-center gap-1.5 whitespace-nowrap">
+            <i class="fa-solid fa-users-gear text-yellow-300"></i> 同盟メンバー管理
+          </h3>
+          <button class="text-gray-400 hover:text-white text-xl font-bold p-1 leading-none" onclick="closeAllianceMemberModal()">&times;</button>
+        </div>
+
+        <div class="flex items-center gap-1.5 w-full">
+          <div class="flex items-center flex-1 bg-black/40 rounded p-0.5 border border-cyan-500/20">
+            <button id="btn-toggle-alliance-groups" class="btn-game btn-xs btn-toggle-base btn-toggle-on flex-1 flex items-center justify-center gap-0.5 whitespace-nowrap py-1 text-[11px] font-bold" onclick="toggleAllianceGroupsArea()" title="グループ選択エリアの表示/非表示">
+              <i id="icon-toggle-alliance-groups" class="fa-solid fa-layer-group text-yellow-400"></i> <span id="label-toggle-alliance-groups">グループON</span>
+            </button>
+            <span class="help-icon-btn shrink-0 ml-0.5 text-[10px]" onclick="toggleHelpTooltip(event, 'alliance-groups')" title="グループ機能の説明">❓</span>
+          </div>
+
+          <div class="flex items-center flex-1 bg-black/40 rounded p-0.5 border border-cyan-500/20">
+            <button id="btn-toggle-quick-add" class="btn-game btn-xs btn-toggle-base btn-toggle-off flex-1 flex items-center justify-center gap-0.5 whitespace-nowrap py-1 text-[11px] font-bold" onclick="toggleAllianceQuickAddArea()" title="個別追加フォームの表示/非表示">
+              <i id="icon-toggle-quick-add" class="fa-solid fa-user-plus"></i> <span id="label-toggle-quick-add">個別追加OFF</span>
+            </button>
+            <span class="help-icon-btn shrink-0 ml-0.5 text-[10px]" onclick="toggleHelpTooltip(event, 'alliance-quick-add')" title="個別追加機能の説明">❓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Group (Preset) Switcher & Management Bar -->
+      <div id="alliance-groups-area" class="bg-black/50 p-2 rounded-lg border border-yellow-500/40 mb-2 space-y-1.5">
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-bold text-yellow-300 flex items-center gap-1">
+            <i class="fa-solid fa-layer-group text-yellow-400"></i> 現在のグループ:
+            <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'alliance-groups')" title="解説を見る">❓</span>
+          </span>
+          <div class="flex gap-1">
+            <button class="btn-game btn-xs bg-yellow-950 border border-yellow-500/50 text-yellow-300 px-1.5 py-0.5 text-[11px] font-bold" onclick="promptCreateAllianceGroup()">
+              <i class="fa-solid fa-plus"></i> 新規グループ
+            </button>
+            <button class="btn-game btn-xs btn-secondary px-1.5 py-0.5 text-[11px]" onclick="promptRenameAllianceGroup()" title="現在のグループ名を変更">
+              <i class="fa-solid fa-pen"></i> 改名
+            </button>
+            <button class="btn-game btn-xs btn-danger px-1.5 py-0.5 text-[11px]" onclick="deleteCurrentAllianceGroup()" title="現在のグループを削除">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        </div>
+        <!-- Group Tabs Wrap Area (v1.04.04 Auto Wrap) -->
+        <div id="alliance-group-tabs-container" class="flex flex-wrap gap-1.5 pt-0.5 pb-1 text-xs">
+          <!-- Dynamic Group Tabs rendered by JS -->
+        </div>
+      </div>
+      
+      <div class="space-y-2.5 text-xs">
+        <!-- Mobile-Optimized Quick Add Form (Name + Seconds) - Default Collapsed for Clean View -->
+        <div id="alliance-quick-add-area" class="bg-black/40 p-2.5 rounded-lg border border-cyan-500/40 space-y-2 hidden">
+          <div class="font-bold text-cyan-300 flex justify-between items-center text-[11px]">
+            <span class="flex items-center gap-1">
+              ➕ メンバーを1人ずつ追加
+              <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'alliance-quick-add')" title="解説を見る">❓</span>
+            </span>
+            <span class="text-gray-400 font-normal">秒数のみ(例:30)でも自動認識</span>
+          </div>
+          <div>
+            <input type="text" id="quick-add-member-name" class="game-input text-xs w-full py-1.5 px-2.5" placeholder="名前 (例: 山田)" onkeydown="if(event.key==='Enter') document.getElementById('quick-add-member-time').focus()">
+          </div>
+          <div class="flex gap-1.5 items-center">
+            <input type="text" id="quick-add-member-time" class="game-input text-xs flex-1 py-1.5 px-2.5 font-mono" placeholder="行軍時間 (例: 30 または 01:30)" onkeydown="if(event.key==='Enter') quickAddAllianceMember()">
+            <button class="btn-game btn-xs btn-accent py-1.5 px-4 font-bold whitespace-nowrap text-xs shadow" onclick="quickAddAllianceMember()">
+              <i class="fa-solid fa-plus"></i> 追加
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Bar & Member List Header -->
+        <div class="space-y-1">
+          <div class="text-[11px] text-gray-300 flex items-center justify-between px-0.5">
+            <span class="truncate">💡 複数検索: 「山田、佐藤」のように読点「、」で一括抽出</span>
+            <span class="help-icon-btn shrink-0" onclick="toggleHelpTooltip(event, 'alliance-search')" title="解説を見る">❓</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <div class="relative flex-1">
+              <input type="text" id="alliance-member-search" class="game-input text-xs w-full py-1.5 pl-7 pr-2" placeholder="🔍 メンバー名を検索..." oninput="renderAllianceMemberList()">
+              <i class="fa-solid fa-magnifying-glass absolute left-2 top-2.5 text-gray-400 text-xs pointer-events-none"></i>
+            </div>
+            <div class="flex items-center bg-black/40 rounded p-0.5 border border-cyan-500/20">
+              <button id="btn-toggle-alliance-batch-import" class="btn-game btn-xs btn-toggle-base btn-toggle-off flex items-center justify-center gap-0.5 whitespace-nowrap py-1 px-2 text-[11px] font-bold" onclick="toggleAllianceBatchImportArea()" title="一括登録/出力エリアの表示/非表示">
+                <i id="icon-toggle-alliance-batch-import" class="fa-solid fa-file-import"></i> <span id="label-toggle-alliance-batch-import">一括登録OFF</span>
+              </button>
+              <span class="help-icon-btn shrink-0 ml-0.5 text-[10px]" onclick="toggleHelpTooltip(event, 'alliance-batch-import')" title="一括登録の説明">❓</span>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center font-bold text-cyan-300 border-b border-cyan-900 pb-1.5 text-xs mt-1.5">
+            <span class="flex items-center gap-1">
+              グループ所属メンバー (<span id="alliance-modal-member-count">0</span>名)
+              <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'alliance-keypad')" title="解説を見る">❓</span>
+            </span>
+            <div class="flex gap-1.5 items-center">
+              <button id="btn-member-sort-name" class="btn-game btn-xs btn-primary active py-0.5 px-2 text-[11px] font-bold whitespace-nowrap" onclick="sortAllianceMembersByName()">
+                🔤 名前順
+              </button>
+              <button id="btn-member-sort-time" class="btn-game btn-xs btn-secondary py-0.5 px-2 text-[11px] font-bold whitespace-nowrap" onclick="sortAllianceMembersByTime()">
+                ⏱ 行軍順
+              </button>
+              <button class="btn-game btn-xs btn-danger py-0.5 px-2 text-[11px] font-bold whitespace-nowrap" onclick="clearAllAllianceMembers()">
+                <i class="fa-solid fa-trash"></i> 全消去
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible Batch Text/CSV Import Area -->
+        <div id="alliance-batch-import-area" class="bg-black/60 p-2 rounded-lg border border-cyan-500/30 space-y-1.5 hidden">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-yellow-300 text-[11px] flex items-center gap-1">
+              📋 テキスト / CSV 一括貼り付け
+              <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'alliance-batch-import')" title="解説を見る">❓</span>
+            </span>
+            <div class="flex gap-1">
+              <button class="btn-game btn-xs bg-yellow-950 border border-yellow-500/50 text-yellow-300 px-1.5 py-0.5 text-[10px] whitespace-nowrap" onclick="loadSample65MembersToTextarea()">サンプル65名</button>
+              <button class="btn-game btn-xs bg-cyan-950 border border-cyan-500/50 text-cyan-300 px-1.5 py-0.5 text-[10px]" onclick="downloadAllianceTemplate('csv')">参考CSV</button>
+            </div>
+          </div>
+          <textarea id="alliance-import-textarea" class="w-full bg-black/70 border border-cyan-500/40 rounded p-1.5 text-cyan-100 font-mono text-xs focus:outline-none focus:border-cyan-400 resize-y" rows="3" placeholder="形式: 名前, 行軍時間&#10;山田, 01:30&#10;佐藤, 35"></textarea>
+          <div class="flex justify-between items-center gap-1.5">
+            <button class="btn-game btn-xs btn-secondary text-[11px]" onclick="exportCurrentAllianceMembers('csv')">
+              <i class="fa-solid fa-download"></i> CSV出力
+            </button>
+            <div class="flex gap-1 ml-auto">
+              <button class="btn-game btn-xs btn-secondary px-2 text-[11px]" onclick="clearAllianceImportTextarea()">クリア</button>
+              <button class="btn-game btn-xs btn-accent font-bold px-2 text-[11px]" onclick="importAllianceMembersFromText()">📥 一括登録</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Member List Container (Click time to open quick keypad) - Expanded to max-h-[50vh] -->
+        <div id="alliance-member-list-container" class="max-h-[50vh] overflow-y-auto space-y-1.5 pr-1">
+          <!-- Member items rendered here -->
+        </div>
+      </div>
+
+      <div class="mt-3 flex justify-end">
+        <button class="btn-game btn-sm btn-secondary font-bold" onclick="closeAllianceMemberModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline Quick Keypad Modal for Member March Time Edit (v1.04.01 Fix Z-Index) -->
+  <div id="alliance-keypad-modal" class="modal-backdrop" style="z-index: 100005;">
+    <div class="modal-body max-w-xs bg-black/95 border-2 border-yellow-400/90 rounded-2xl shadow-2xl p-3 text-center">
+      <div class="flex justify-between items-center border-b border-yellow-500/40 pb-1.5 mb-2">
+        <div class="font-bold text-yellow-300 text-xs flex items-center gap-1">
+          <i class="fa-solid fa-stopwatch text-yellow-400"></i> <span id="keypad-member-name">メンバー名</span> <span id="keypad-original-time" class="text-gray-400 font-mono text-[11px] font-normal">(現在 00:25)</span>
+        </div>
+        <button class="text-gray-400 text-lg font-bold p-1" onclick="closeAllianceKeypadModal()">&times;</button>
+      </div>
+
+      <!-- Keypad Display -->
+      <div class="bg-black/80 border border-yellow-500/50 rounded-xl p-2 mb-2">
+        <div class="text-[10px] text-gray-400 mb-0.5">数字タップで入力 (例: 2 5 ➔ 00:25 / 1 3 0 ➔ 01:30)</div>
+        <div id="keypad-display-val" class="text-3xl font-black text-digital text-yellow-300">00:00</div>
+      </div>
+
+      <!-- Quick Adjust Buttons -->
+      <div class="grid grid-cols-4 gap-1 mb-2">
+        <button class="btn-game btn-xs btn-secondary py-1 text-xs" onclick="adjustKeypadSeconds(-5)">-5s</button>
+        <button class="btn-game btn-xs btn-secondary py-1 text-xs" onclick="adjustKeypadSeconds(-1)">-1s</button>
+        <button class="btn-game btn-xs btn-secondary py-1 text-xs" onclick="adjustKeypadSeconds(1)">+1s</button>
+        <button class="btn-game btn-xs btn-secondary py-1 text-xs" onclick="adjustKeypadSeconds(5)">+5s</button>
+      </div>
+
+      <!-- Numeric Keypad Grid -->
+      <div class="grid grid-cols-3 gap-1.5 mb-2.5">
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('1')">1</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('2')">2</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('3')">3</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('4')">4</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('5')">5</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('6')">6</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('7')">7</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('8')">8</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('9')">9</button>
+        <button class="btn-game btn-sm btn-danger py-2 font-bold text-xs" onclick="clearKeypadInput()">クリア</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-black text-base" onclick="pressKeypadNumber('0')">0</button>
+        <button class="btn-game btn-sm btn-secondary py-2 font-bold text-xs" onclick="backspaceKeypadInput()">⌫</button>
+      </div>
+
+      <button class="btn-game btn-sm btn-primary w-full py-2 font-black text-sm shadow-lg shadow-cyan-500/30" onclick="confirmKeypadTime()">
+        <i class="fa-solid fa-check mr-1"></i> 時間を保存
+      </button>
+    </div>
+  </div>
+
+  <!-- Alliance Member Selection Modal (v1.04.00 Group & Search Integration) -->
+  <div id="alliance-selection-modal" class="modal-backdrop">
+    <div class="modal-body max-w-lg">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="text-base font-bold text-cyan-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-user-check text-yellow-300"></i> 同盟チャット送信対象の選択
+        </h3>
+        <button class="text-gray-400 text-xl font-bold p-1" onclick="closeAllianceMemberSelectionModal()">&times;</button>
+      </div>
+
+      <!-- Quick Group Selector in Selection Modal -->
+      <div class="bg-black/50 p-2 rounded-lg border border-yellow-500/40 mb-2">
+        <div class="flex justify-between items-center text-[11px] mb-1">
+          <span class="font-bold text-yellow-300 flex items-center gap-1">
+            グループ一括選択:
+            <span class="help-icon-btn" onclick="toggleHelpTooltip(event, 'alliance-selection-group')" title="解説を見る">❓</span>
+          </span>
+          <span class="text-gray-400">グループを切り替えて一発選択</span>
+        </div>
+        <div id="alliance-selection-group-tabs" class="flex flex-wrap gap-1 pt-0.5 pb-0.5 text-xs">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <!-- Search & Bulk Select Controls -->
+        <div class="space-y-1">
+          <div class="text-[11px] text-gray-300 flex items-center justify-between px-0.5">
+            <span class="truncate">💡 複数検索: 「山田、佐藤」のように読点「、」で一括抽出</span>
+            <span class="help-icon-btn shrink-0" onclick="toggleHelpTooltip(event, 'alliance-search')" title="解説を見る">❓</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <div class="relative flex-1">
+              <input type="text" id="alliance-selection-search" class="game-input text-xs w-full py-1.5 pl-7 pr-2" placeholder="🔍 メンバー名を検索..." oninput="renderAllianceSelectionList()">
+              <i class="fa-solid fa-magnifying-glass absolute left-2 top-2.5 text-gray-400 text-xs pointer-events-none"></i>
+            </div>
+            <button class="btn-game btn-xs btn-primary font-bold py-1.5 px-2 text-[11px] whitespace-nowrap" onclick="setAllAllianceSelection(true)">全選択</button>
+            <button class="btn-game btn-xs btn-secondary py-1.5 px-2 text-[11px] whitespace-nowrap" onclick="setAllAllianceSelection(false)">全解除</button>
+          </div>
+        </div>
+
+        <div class="text-[11px] text-gray-400 flex justify-between items-center px-1">
+          <span>選択中: <strong id="alliance-selection-selected-num" class="text-yellow-300 text-sm font-black">0</strong> / <span id="alliance-selection-total-num">0</span>名</span>
+          <span id="alliance-selection-sort-hint">(あいうえお順でコピーされます)</span>
+        </div>
+
+        <div id="alliance-selection-list-container" class="max-h-64 overflow-y-auto space-y-1 pr-1 bg-black/40 p-2 rounded-lg border border-cyan-900/50">
+          <!-- Checkbox list items rendered here -->
+        </div>
+      </div>
+
+      <div class="mt-3 flex justify-end gap-2">
+        <button class="btn-game btn-sm btn-primary font-bold px-4" onclick="closeAllianceMemberSelectionModal()">決定</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- v1.05.01: Screenshot OCR Result Preview & Multi-Target Selection Modal -->
+  <div id="ocr-preview-modal" class="modal-backdrop" style="z-index: 100010;">
+    <div class="modal-body max-w-lg w-[96vw] max-h-[94vh] flex flex-col bg-black/95 border-2 border-cyan-400/90 rounded-2xl shadow-2xl p-3 space-y-2">
+      <!-- Modal Header -->
+      <div class="flex justify-between items-center border-b border-cyan-500/40 pb-2">
+        <div class="font-black text-cyan-300 text-sm sm:text-base flex items-center gap-1.5">
+          <i class="fa-solid fa-wand-magic-sparkles text-yellow-300"></i>
+          <span>スクショ解析結果プレビュー</span>
+        </div>
+        <button class="text-gray-400 hover:text-white text-xl font-bold p-1 leading-none" onclick="closeOcrPreviewModal()">&times;</button>
+      </div>
+
+      <!-- Time Lag Summary Box with Smart Time Editor -->
+      <div class="bg-cyan-950/60 p-2.5 rounded-xl border border-cyan-500/50 space-y-1.5 text-xs">
+        <div class="flex justify-between items-center text-cyan-200 flex-wrap gap-1">
+          <div class="flex items-center gap-1.5">
+            <span>📸 撮影時刻:</span>
+            <input type="text" id="ocr-capture-time-input" class="bg-black/80 text-yellow-300 border border-yellow-500/60 rounded px-1.5 py-0.5 font-mono text-xs font-bold w-20 text-center focus:outline-none focus:ring-1 focus:ring-yellow-400" placeholder="HH:MM:SS" onchange="handleOcrManualCaptureTimeChange(this.value)">
+          </div>
+          <div class="flex items-center gap-1">
+            <span>⏱️ 経過ラグ:</span>
+            <strong id="ocr-elapsed-lag" class="font-mono text-yellow-300 text-sm font-black">+0.0秒</strong>
+          </div>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-gray-300 pt-0.5 border-t border-cyan-900/60 flex-wrap gap-1">
+          <span>💡 スマホの撮影時刻を自動解析（ズレがある場合は手動微調整可能）</span>
+          <div class="flex gap-1">
+            <button type="button" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-600" onclick="adjustOcrLag(-5)">-5s</button>
+            <button type="button" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-600" onclick="adjustOcrLag(+5)">+5s</button>
+            <button type="button" class="bg-gray-800 hover:bg-gray-700 text-cyan-300 px-1.5 py-0.5 rounded text-[10px] font-bold border border-cyan-700" onclick="resetOcrLagToNow()">今撮った</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processing Loading State (Hidden by default) -->
+      <div id="ocr-loading-view" class="py-6 text-center space-y-3 hidden">
+        <div class="inline-block w-10 h-10 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+        <div class="text-sm font-bold text-yellow-300 animate-pulse" id="ocr-loading-status">ホワサバ画面をAI文字解析中... (0%)</div>
+        <div class="text-xs text-gray-400">青枠カード・集結/行軍時間・領主名を抽出しています</div>
+      </div>
+
+      <!-- Detected Enemies / Marches Container -->
+      <div id="ocr-results-view" class="space-y-2 flex-1 flex flex-col min-h-0">
+        <div class="text-xs font-bold text-yellow-300 flex justify-between items-center">
+          <span>🎯 差し込みターゲットを選択:</span>
+          <span class="text-[11px] text-gray-400">検出: <strong id="ocr-detected-count" class="text-cyan-300">0</strong> 件</span>
+        </div>
+
+        <div id="ocr-detected-marches-list" class="flex-1 min-h-0 flex flex-col">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <!-- Timeout Warning (Shown if out of time) -->
+        <div id="ocr-timeout-warning" class="bg-red-950/80 border border-red-500 text-red-300 p-2 rounded-lg text-xs font-bold space-y-1 hidden">
+          <div class="flex items-center gap-1 text-red-400">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>【発車時間切れ】スクショから時間が経過しており間に合いません！</span>
+          </div>
+          <div class="text-[11px] opacity-90 font-normal">
+            別のまだ間に合う行軍を選択するか、新しく撮り直したスクショを貼り付けてください。
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="pt-2 flex gap-2">
+          <button class="btn-game btn-sm btn-secondary flex-1 font-bold text-xs" onclick="closeOcrPreviewModal()">キャンセル</button>
+          <button id="btn-confirm-ocr-sync" class="btn-game btn-sm btn-accent flex-2 py-2.5 font-black text-sm shadow-lg shadow-yellow-500/30 flex items-center justify-center gap-1" onclick="applySelectedOcrTarget()">
+            <i class="fa-solid fa-check"></i> 🚀 この設定で確定・追従開始！
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom JS -->
+  <script src="app.js?v=1.05.01"></script>
+
+    <!-- Floating Toast / Snackbar Notification (v1.05.01) -->
+    <div id="toast-container" style="position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;"></div>
+  
+</body>
+</html>
