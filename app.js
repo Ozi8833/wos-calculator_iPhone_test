@@ -564,17 +564,32 @@ function clearAllMarches() {
 
 // --- Web Audio API Alert Beep Generator ---
 function initAudio() {
-  if (!state.audioCtx) {
-    const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
-    if (AudioCtxClass) {
-      state.audioCtx = new AudioCtxClass();
+  try {
+    if (!state.audioCtx) {
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtxClass) {
+        state.audioCtx = new AudioCtxClass();
+      }
     }
+    if (state.audioCtx) {
+      if (state.audioCtx.state === 'suspended') {
+        state.audioCtx.resume();
+      }
+      // iOS Mobile Safari audio unlock: Play a 1-sample silent buffer synchronously
+      if (!state.audioUnlocked) {
+        const buffer = state.audioCtx.createBuffer(1, 1, 22050);
+        const source = state.audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(state.audioCtx.destination);
+        source.start(0);
+        state.audioUnlocked = true;
+        console.log('🔊 AudioContext unlocked successfully with iOS silent buffer');
+      }
+    }
+    requestScreenWakeLock();
+  } catch (e) {
+    console.warn('initAudio error:', e);
   }
-  if (state.audioCtx && state.audioCtx.state === 'suspended') {
-    state.audioCtx.resume();
-  }
-  state.audioUnlocked = true;
-  requestScreenWakeLock();
 }
 
 function playBeep(freq = 880, type = 'sine', duration = 0.15) {
@@ -2656,6 +2671,15 @@ function initApp() {
   updateTimezoneUI();
   applyButtonTheme();
 
+  // Global iOS Audio & WakeLock unlock on any user tap/touch
+  const unlockAudioOnTouch = () => {
+    initAudio();
+    document.removeEventListener('touchstart', unlockAudioOnTouch);
+    document.removeEventListener('pointerdown', unlockAudioOnTouch);
+  };
+  document.addEventListener('touchstart', unlockAudioOnTouch, { passive: true });
+  document.addEventListener('pointerdown', unlockAudioOnTouch, { passive: true });
+
   // Tap to start splash handler (Button & Overlay)
   const hideSplash = () => {
     initAudio();
@@ -3271,17 +3295,25 @@ function updateSimpleCountdown() {
   const modeText = simpleLaunchState.statusMode === 'rally' ? '集結完了後発車' : '行軍着弾';
   const diffSec = (simpleLaunchState.targetLaunchDate.getTime() - now.getTime()) / 1000;
 
-  // 10s Countdown Audio Beep Logic
-  if (!isSimpleAudioMuted && diffSec > 0 && diffSec <= 10.05) {
+  // 10s Countdown Audio Beep & Vibration Logic (v1.05.01)
+  if (diffSec > 0 && diffSec <= 10.05) {
     const currentCeilSec = Math.ceil(diffSec);
     if (simpleLaunchState.lastBeepSecond !== currentCeilSec) {
       simpleLaunchState.lastBeepSecond = currentCeilSec;
-      if (currentCeilSec === 1) {
-        // High pitched urgent beep at 1s mark
-        playBeep(1200, 'sine', 0.25);
-      } else {
-        // Regular countdown beeps (10s ~ 2s)
-        playBeep(880, 'sine', 0.12);
+      if (!isSimpleAudioMuted) {
+        if (currentCeilSec === 1) {
+          playBeep(1200, 'sine', 0.25);
+        } else {
+          playBeep(880, 'sine', 0.12);
+        }
+      }
+      // Trigger vibration synced with countdown beeps
+      if (isSimpleVibrationEnabled) {
+        if (currentCeilSec === 1) {
+          triggerVibration([80, 50, 80]); // 2 quick pulses at 1s
+        } else {
+          triggerVibration(80); // Short rhythmic buzz for 10s ~ 2s
+        }
       }
     }
   }
@@ -3297,9 +3329,14 @@ function updateSimpleCountdown() {
     subInfo.textContent = `相手着弾直後 (0.3秒後) に自動合わせ中 (${modeText})`;
   } else if (diffSec > -1.0) {
     // Launch Deadline Reached (0s Window): Play Big Launch Chime once
-    if (!isSimpleAudioMuted && simpleLaunchState.lastBeepSecond !== 0) {
+    if (simpleLaunchState.lastBeepSecond !== 0) {
       simpleLaunchState.lastBeepSecond = 0;
-      playBeep(1760, 'triangle', 0.4); // Major high chime on launch!
+      if (!isSimpleAudioMuted) {
+        playBeep(1760, 'triangle', 0.4); // Major high chime on launch!
+      }
+      if (isSimpleVibrationEnabled) {
+        triggerVibration([200, 100, 300]); // Strong double buzz on launch!
+      }
     }
 
     statusLabel.textContent = "🟢 今すぐ発車せよ！！ (発車推奨ウィンドウ中)";
@@ -4825,16 +4862,18 @@ window.addEventListener('paste', async (e) => {
         let captureDate = getAdjustedNowTime();
         if (parsed.time) {
           const tStr = String(parsed.time);
-          // Match yyyy-MM-dd HH:mm:ss or HH:mm:ss
-          const dtMatch = tStr.match(/(\d{4})[-_]?(\d{2})[-_]?(\d{2})[\sT_]?(\d{2})[:：](\d{2})[:：](\d{2})/);
+          const dtMatch = tStr.match(/(\d{4})[-_\/]?(\d{2})[-_\/]?(\d{2})[\sT_]?(\d{2})[:：](\d{2})(?:[:：](\d{2}))?/);
           if (dtMatch) {
-            const rawDate = new Date(parseInt(dtMatch[1], 10), parseInt(dtMatch[2], 10) - 1, parseInt(dtMatch[3], 10), parseInt(dtMatch[4], 10), parseInt(dtMatch[5], 10), parseInt(dtMatch[6], 10));
+            const sec = dtMatch[6] ? parseInt(dtMatch[6], 10) : 0;
+            const rawDate = new Date(parseInt(dtMatch[1], 10), parseInt(dtMatch[2], 10) - 1, parseInt(dtMatch[3], 10), parseInt(dtMatch[4], 10), parseInt(dtMatch[5], 10), sec);
             captureDate = new Date(rawDate.getTime() + (state.syncOffsetMs || 0));
           } else {
-            const timeOnly = tStr.match(/(\d{2})[:：](\d{2})[:：](\d{2})/);
+            const timeOnly = tStr.match(/(\d{2})[:：](\d{2})(?:[:：](\d{2}))?/);
             if (timeOnly) {
+              const now = getAdjustedNowTime();
+              const sec = timeOnly[3] ? parseInt(timeOnly[3], 10) : 0;
               const rawDate = new Date(now);
-              rawDate.setHours(parseInt(timeOnly[1], 10), parseInt(timeOnly[2], 10), parseInt(timeOnly[3], 10), 0);
+              rawDate.setHours(parseInt(timeOnly[1], 10), parseInt(timeOnly[2], 10), sec, 0);
               captureDate = new Date(rawDate.getTime() + (state.syncOffsetMs || 0));
             }
           }
