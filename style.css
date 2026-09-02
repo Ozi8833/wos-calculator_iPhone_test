@@ -711,7 +711,7 @@ body[data-btn-theme="gold"] .btn-toggle-off {
 
 .card-fine-tune {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
 }
 
@@ -770,26 +770,27 @@ body[data-btn-theme="gold"] .btn-toggle-off {
   100% { transform: scale(1.06); }
 }
 
-/* Modals (v1.03.41 Raised z-index to 99999 to always stay on top of fixed header) */
+/* Modals (v1.06.00 Top-layer with 74px bottom scroll protection) */
 .modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(8px);
   z-index: 99999;
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 16px;
+  align-items: flex-start !important; /* Fixed top alignment */
+  padding: 24px 16px 80px 16px !important; /* Top fixed + bottom clearance */
+  box-sizing: border-box;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s;
+  transition: opacity 0.25s ease-out;
 }
 
-.modal-backdrop.open {
+.modal-backdrop.open, .modal-backdrop.active {
   opacity: 1;
   pointer-events: auto;
 }
@@ -842,41 +843,53 @@ body[data-btn-theme="gold"] .btn-toggle-off {
   color: #000;
 }
 
-/* Bottom Navigation Bar */
+
+/* Modern 5-Hub Bottom Navigation Bar */
 .bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 600px;
-  background: rgba(8, 12, 20, 0.94);
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  background: rgba(8, 12, 20, 0.98) !important;
   backdrop-filter: blur(16px);
-  border-top: 1px solid var(--card-border);
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  padding: 6px;
-  z-index: 1000;
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1.5px solid var(--card-border) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-around !important;
+  align-items: center !important;
+  padding: 4px 6px !important;
+  z-index: 100050 !important; /* Above all modals so user can always switch tabs instantly */
+  box-sizing: border-box !important;
 }
 
-.nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.6);
-  cursor: pointer;
-  background: none;
-  border: none;
-  gap: 4px;
+.bottom-nav .nav-item {
+  flex: 1 1 25% !important;
+  max-width: 25% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 6px 2px !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  cursor: pointer !important;
+  background: none !important;
+  border: none !important;
+  gap: 3px !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
 }
 
-.nav-item.active, .nav-item:active {
-  color: var(--accent-color);
+.bottom-nav .nav-item.active {
+  color: #00f0ff !important;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6) !important;
+  transform: translateY(-1px) !important;
 }
+
 
 /* Timeline Row Selected Highlight (v1.03.08 Premium Static Gold Highlight) */
 .timeline-row-selected {
@@ -949,7 +962,7 @@ body[data-btn-theme="gold"] .btn-toggle-off {
   }
 }
 
-/* Toast / Snackbar Notification Animation (v1.05.01) */
+/* Toast / Snackbar Notification Animation (v1.06.00) */
 .toast-item {
   background: rgba(10, 20, 35, 0.95);
   border: 1.5px solid var(--accent-color, #00f0ff);

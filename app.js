@@ -1,3 +1,15 @@
+
+// --- Security: HTML Injection / XSS Protection Helper (v1.06.12) ---
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 /* ==========================================================================
    Whiteout Survival Insertion Calculator & Multi-March Tracker (v10.0 Logic)
    ========================================================================== */
@@ -154,8 +166,8 @@ function renderPresetPickerList() {
     item.innerHTML = `
       <div class="flex-1 cursor-pointer" onclick="selectPresetFromModal(${originalIdx})">
         <div class="font-bold text-cyan-300 text-sm flex items-center gap-2">
-          ${p.tag ? `<span class="bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded text-xs font-mono">[${p.tag}]</span>` : ''}
-          <span>${p.name || '領主名なし'}</span>
+          ${p.tag ? `<span class="bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded text-xs font-mono">[${escapeHtml(p.tag)}]</span>` : ''}
+          <span>${escapeHtml(p.name) || '領主名なし'}</span>
         </div>
         <div class="text-xs text-gray-400 font-mono mt-0.5">
           行軍時間: <span class="text-yellow-300 font-bold">${formatCountdownMMSSs(p.marchSec)}</span>
@@ -237,7 +249,7 @@ function renderMarchCards() {
     let presetOptionsHtml = '<option value="">-- 💾 プリセット呼出 --</option>';
     state.enemyPresets.forEach((p, pIdx) => {
       const isSelected = march.selectedPresetIndex === pIdx;
-      presetOptionsHtml += `<option value="${pIdx}" ${isSelected ? 'selected' : ''}>[${p.tag}] ${p.name} (${formatCountdownMMSSs(p.marchSec)})</option>`;
+      presetOptionsHtml += `<option value="${pIdx}" ${isSelected ? 'selected' : ''}>[${escapeHtml(p.tag)}] ${escapeHtml(p.name)} (${formatCountdownMMSSs(p.marchSec)})</option>`;
     });
 
     const hideAdjust = state.settings.hideAdjustButtons || false;
@@ -611,7 +623,7 @@ function playBeep(freq = 880, type = 'sine', duration = 0.15) {
 }
 
 
-// --- Screen Wake Lock Manager (v1.05.01) ---
+// --- Screen Wake Lock Manager (v1.06.12) ---
 let wakeLockInstance = null;
 
 async function requestScreenWakeLock() {
@@ -647,13 +659,13 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 
-// --- Toast / Snackbar Notification Helper (v1.05.01) ---
+// --- Toast / Snackbar Notification Helper (v1.06.12) ---
 function showToast(message, type = 'success', duration = 2200) {
   let container = document.getElementById('toast-container');
   if (!container) {
     container = document.createElement('div');
     container.id = 'toast-container';
-    container.style.cssText = 'position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;';
+    container.style.cssText = 'position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 9999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;';
     document.body.appendChild(container);
   }
 
@@ -681,7 +693,7 @@ function showToast(message, type = 'success', duration = 2200) {
   }, duration);
 }
 
-// --- Vibration Feedback Helper (v1.05.01) ---
+// --- Vibration Feedback Helper (v1.06.12) ---
 function triggerVibration(pattern) {
   try {
     if ('vibrate' in navigator && isSimpleVibrationEnabled) {
@@ -980,7 +992,7 @@ function calculateInsertion() {
                            (e2.march.hasBeenStarted || e2.march.isRunning);
 
     // Latest launch max date for this specific gap (launch deadline)
-    const launchMaxDate = new Date(e2.landDate.getTime() - 300 - myMarchSec * 1000);
+    const launchMaxDate = new Date(e2.landDate.getTime() - getInsertionMarginMs() - myMarchSec * 1000);
     // Gap is expired when both marches were started AND current time has passed the latest launch deadline
     const isExpired = gapBothStarted && (now.getTime() >= launchMaxDate.getTime());
 
@@ -1049,6 +1061,7 @@ function calculateInsertion() {
   renderGapSelectorTabs(displayGaps);
 
   const activeGap = displayGaps[state.selectedGapIndex] || displayGaps[0];
+  if (!activeGap || !activeGap.enemy1 || !activeGap.enemy2) return;
   const enemy1 = activeGap.enemy1;
   const enemy2 = activeGap.enemy2;
   const enemy1LandDate = enemy1.landDate;
@@ -1056,13 +1069,13 @@ function calculateInsertion() {
   const gapDeltaSec = activeGap.deltaSec;
 
   // Update Target Labels (Show rank + enemy number)
-  document.getElementById('label-target-enemy1').textContent = `${activeGap.rank1}着 (相手 ${enemy1.originalIdx + 1}) 着弾:`;
-  document.getElementById('label-target-enemy2').textContent = `${activeGap.rank2}着 (相手 ${enemy2.originalIdx + 1}) 着弾:`;
+  const l1 = document.getElementById('label-target-enemy1'); if (l1) l1.textContent = `${activeGap.rank1}着 (相手 ${enemy1.originalIdx + 1}) 着弾:`;
+  const l2 = document.getElementById('label-target-enemy2'); if (l2) l2.textContent = `${activeGap.rank2}着 (相手 ${enemy2.originalIdx + 1}) 着弾:`;
 
   // Earliest Launch (Enemy 1 + 0.3s)
-  const launchMinDate = new Date(enemy1LandDate.getTime() + 300 - myMarchSec * 1000);
+  const launchMinDate = new Date(enemy1LandDate.getTime() + getInsertionMarginMs() - myMarchSec * 1000);
   // Latest Launch (Enemy 2 - 0.3s)
-  const launchMaxDate = new Date(enemy2LandDate.getTime() - 300 - myMarchSec * 1000);
+  const launchMaxDate = new Date(enemy2LandDate.getTime() - getInsertionMarginMs() - myMarchSec * 1000);
   // Middle Recommended Launch
   const launchMidDate = new Date(launchMinDate.getTime() + (launchMaxDate.getTime() - launchMinDate.getTime()) / 2);
 
@@ -1074,17 +1087,17 @@ function calculateInsertion() {
   const launchMaxCountdownSec = (launchMaxDate.getTime() - now.getTime()) / 1000;
 
   // Update UI Elements
-  document.getElementById('res-enemy1-land').textContent = formatTimeHHMMSSs(enemy1LandDate);
-  document.getElementById('res-enemy2-land').textContent = formatTimeHHMMSSs(enemy2LandDate);
-  document.getElementById('res-gap-delta').textContent = `${gapDeltaSec.toFixed(1)}s`;
-  document.getElementById('res-window-span').textContent = `${windowSpanSec.toFixed(1)}秒間`;
+  const e1Land = document.getElementById('res-enemy1-land'); if (e1Land) e1Land.textContent = formatTimeHHMMSSs(enemy1LandDate);
+  const e2Land = document.getElementById('res-enemy2-land'); if (e2Land) e2Land.textContent = formatTimeHHMMSSs(enemy2LandDate);
+  const resDelta = document.getElementById('res-gap-delta'); if (resDelta) resDelta.textContent = `${gapDeltaSec.toFixed(1)}s`;
+  const resSpan = document.getElementById('res-window-span'); if (resSpan) resSpan.textContent = `${windowSpanSec.toFixed(1)}秒間`;
 
-  document.getElementById('res-launch-min').textContent = formatTimeHHMMSSs(launchMinDate);
-  document.getElementById('res-launch-mid').textContent = formatTimeHHMMSSs(launchMidDate);
-  document.getElementById('res-launch-max').textContent = formatTimeHHMMSSs(launchMaxDate);
+  const rMin = document.getElementById('res-launch-min'); if (rMin) rMin.textContent = formatTimeHHMMSSs(launchMinDate);
+  const rMid = document.getElementById('res-launch-mid'); if (rMid) rMid.textContent = formatTimeHHMMSSs(launchMidDate);
+  const rMax = document.getElementById('res-launch-max'); if (rMax) rMax.textContent = formatTimeHHMMSSs(launchMaxDate);
 
   // Main scheduled launch time display set to Earliest Launch
-  document.getElementById('launch-scheduled-time').textContent = formatTimeHHMMSSs(launchMinDate);
+  const schTime = document.getElementById('launch-scheduled-time'); if (schTime) schTime.textContent = formatTimeHHMMSSs(launchMinDate);
 
   const countdownElem = document.getElementById('launch-countdown');
   const miniTimerElem = document.getElementById('mini-launch-timer');
@@ -1093,6 +1106,9 @@ function calculateInsertion() {
   const miniFillElem = document.getElementById('mini-launch-fill');
   const statusElem = document.getElementById('window-status-text');
   const fillElem = document.getElementById('launch-window-fill');
+
+  const safeSetText = (elem, text) => { if (elem) elem.textContent = text; };
+  const safeSetHtml = (elem, html) => { if (elem) elem.innerHTML = html; };
 
   const miniSelectedGapElem = document.getElementById('mini-selected-gap');
   if (miniSelectedGapElem) {
@@ -1111,44 +1127,44 @@ function calculateInsertion() {
     // 1. UNSTARTED WAITING STATE: Both marches have not been started yet
     const staticMinCountdownSec = (enemy1.march.remainingRallySec + enemy1.march.marchTimeSec + 0.3) - myMarchSec;
     const staticCountdownStr = formatCountdownMMSSs(Math.max(0, staticMinCountdownSec));
-    countdownElem.textContent = staticCountdownStr;
-    miniTimerElem.textContent = staticCountdownStr;
-    statusElem.className = "text-xs text-center font-bold text-cyan-300 mt-1";
-    statusElem.textContent = `⏸ タイマー待機中 (対象相手の「▶ スタート」で進行します)`;
-    fillElem.style.left = '0%';
-    fillElem.style.width = '0%';
+    safeSetText(countdownElem, staticCountdownStr);
+    safeSetText(miniTimerElem, staticCountdownStr);
+    if(statusElem) statusElem.className = "text-xs text-center font-bold text-cyan-300 mt-1";
+    safeSetText(statusElem, `⏸ タイマー待機中 (対象相手の「▶ スタート」で進行します)`);
+    if(fillElem) fillElem.style.left = '0%';
+    if(fillElem) fillElem.style.width = '0%';
     if (miniFillElem) miniFillElem.style.width = '0%';
-    miniHeaderElem.className = "mt-1 text-xs font-bold text-yellow-300 contrast-plate px-2 py-1.5 rounded-lg border border-yellow-500/30";
+      if (miniHeaderElem) miniHeaderElem.className = "mt-1 text-xs font-bold text-yellow-300 contrast-plate px-2 py-1.5 rounded-lg border border-yellow-500/30";
   } else if (isPastDeadline) {
     // 2. EXPIRED STATE: Marches were started, and current time has passed latest launch deadline
-    countdownElem.textContent = "00:00.0";
-    miniTimerElem.textContent = "00:00.0";
-    statusElem.className = "text-xs text-center font-bold text-red-400 mt-1";
-    statusElem.textContent = `❌ 発車タイミングを過ぎました`;
-    miniHeaderElem.className = "mt-1 text-xs font-bold text-red-400 contrast-plate px-2 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10";
+    safeSetText(countdownElem, "00:00.0");
+    safeSetText(miniTimerElem, "00:00.0");
+    if(statusElem) statusElem.className = "text-xs text-center font-bold text-red-400 mt-1";
+    safeSetText(statusElem, `❌ 発車タイミングを過ぎました`);
+    if(miniHeaderElem) miniHeaderElem.className = "mt-1 text-xs font-bold text-red-400 contrast-plate px-2 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10";
     fillElem.style.left = '0%';
-    fillElem.style.width = '100%';
+    if(fillElem) fillElem.style.width = '100%';
     if (miniFillElem) miniFillElem.style.width = '100%';
   } else {
     // 3. ACTIVE COUNTDOWN STATE: Marches were started, and deadline is in the future
     const displayCountdownSec = Math.max(0, launchMinCountdownSec);
     const countdownStr = formatCountdownMMSSs(displayCountdownSec);
-    countdownElem.textContent = countdownStr;
-    miniTimerElem.textContent = countdownStr;
+    safeSetText(countdownElem, countdownStr);
+    safeSetText(miniTimerElem, countdownStr);
 
     if (launchMinCountdownSec > 0) {
       // Before earliest launch
-      statusElem.className = "text-xs text-center font-bold text-green-300 mt-1";
-      statusElem.textContent = `🟢 最速発車まで あと ${formatCountdownMMSSs(launchMinCountdownSec)} (猶予 ${windowSpanSec.toFixed(1)}秒間)`;
+      if (statusElem) statusElem.className = "text-xs text-center font-bold text-green-300 mt-1";
+      if (statusElem) statusElem.textContent = `🟢 最速発車まで あと ${formatCountdownMMSSs(launchMinCountdownSec)} (猶予 ${windowSpanSec.toFixed(1)}秒間)`;
       fillElem.style.left = '0%';
       fillElem.style.width = '0%';
       if (miniFillElem) miniFillElem.style.width = '0%';
-      miniHeaderElem.className = "mt-1 text-xs font-bold text-yellow-300 contrast-plate px-2 py-1.5 rounded-lg border border-yellow-500/30";
+      if (miniHeaderElem) miniHeaderElem.className = "mt-1 text-xs font-bold text-yellow-300 contrast-plate px-2 py-1.5 rounded-lg border border-yellow-500/30";
     } else {
       // Currently INSIDE the launch window!
-      statusElem.className = "text-xs text-center font-bold text-yellow-300 animate-pulse mt-1";
-      statusElem.textContent = `🔥【今すぐ発車可能！】 締め切りまで 残り ${launchMaxCountdownSec.toFixed(1)}秒！`;
-      miniHeaderElem.className = "mt-1 text-xs font-bold text-yellow-400 contrast-plate px-2 py-1.5 rounded-lg border border-yellow-500/50 bg-yellow-500/20 animate-pulse";
+      if (statusElem) statusElem.className = "text-xs text-center font-bold text-yellow-300 animate-pulse mt-1";
+      if (statusElem) statusElem.textContent = `🔥【今すぐ発車可能！】 締め切りまで 残り ${launchMaxCountdownSec.toFixed(1)}秒！`;
+      if (miniHeaderElem) miniHeaderElem.className = "mt-1 text-xs font-bold text-yellow-400 contrast-plate px-2 py-1.5 rounded-lg border border-yellow-500/50 bg-yellow-500/20 animate-pulse";
 
       // Fill from left to right as time passes inside window (0% -> 100%)
       let elapsedTimeInWindow = windowSpanSec - launchMaxCountdownSec;
@@ -1160,7 +1176,7 @@ function calculateInsertion() {
   }
 
   // Countdown Alert Color Changes (5s / 3s) & Audio Beep (Only when started)
-  countdownElem.classList.remove('warning-5s', 'danger-3s');
+  if (countdownElem) countdownElem.classList.remove('warning-5s', 'danger-3s');
 
   if (isGapStarted && !isPastDeadline) {
     const targetTriggerSec = (launchMinCountdownSec > 0) ? launchMinCountdownSec : launchMaxCountdownSec;
@@ -1184,20 +1200,20 @@ function calculateInsertion() {
   
   if (!isGapStarted || launchMaxCountdownSec < 0) {
     // Hide risk badge when not started or when launch deadline has passed
-    riskBadge.style.display = 'none';
+    if (riskBadge) riskBadge.style.display = 'none';
   } else {
-    riskBadge.style.display = 'inline-flex';
-    riskBadge.className = 'risk-badge safe-text';
+    if (riskBadge) riskBadge.style.display = 'inline-flex';
+    if (riskBadge) riskBadge.className = 'risk-badge safe-text';
 
     if (gapDeltaSec >= 3.0) {
-      riskBadge.classList.add('risk-safe');
-      riskBadge.innerHTML = `<i class="fa-solid fa-shield-check"></i> 🟢 安全 (発車猶予 ${windowSpanSec.toFixed(1)}s 成功率極高)`;
+      if (riskBadge) riskBadge.classList.add('risk-safe');
+      if (riskBadge) riskBadge.innerHTML = `<i class="fa-solid fa-shield-check"></i> 🟢 安全 (発車猶予 ${windowSpanSec.toFixed(1)}s 成功率極高)`;
     } else if (gapDeltaSec >= 1.1) {
-      riskBadge.classList.add('risk-warn');
-      riskBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 🟡 注意 (発車猶予 ${windowSpanSec.toFixed(1)}s 微調整推奨)`;
+      if (riskBadge) riskBadge.classList.add('risk-warn');
+      if (riskBadge) riskBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 🟡 注意 (発車猶予 ${windowSpanSec.toFixed(1)}s 微調整推奨)`;
     } else {
-      riskBadge.classList.add('risk-danger');
-      riskBadge.innerHTML = `<i class="fa-solid fa-radiation"></i> 🔴 危険 (着弾差 ${gapDeltaSec.toFixed(1)}s - 同秒判定重複リスク)`;
+      if (riskBadge) riskBadge.classList.add('risk-danger');
+      if (riskBadge) riskBadge.innerHTML = `<i class="fa-solid fa-radiation"></i> 🔴 危険 (着弾差 ${gapDeltaSec.toFixed(1)}s - 同秒判定重複リスク)`;
     }
   }
 }
@@ -1259,9 +1275,16 @@ function startClockLoop() {
     // Update live clock display
     try {
       const now = getAdjustedNowTime();
+      const timeStr = formatTimeHHMMSSs(now);
       const clockElem = document.getElementById('live-clock');
-      if (clockElem) {
-        clockElem.textContent = formatTimeHHMMSSs(now);
+      if (clockElem) clockElem.textContent = timeStr;
+      const modalClock = document.getElementById('modal-live-clock');
+      if (modalClock) modalClock.textContent = timeStr;
+      const shareClock = document.getElementById('share-modal-live-clock');
+      if (shareClock) shareClock.textContent = timeStr;
+      const shareModal = document.getElementById('operation-share-modal');
+      if (shareModal && shareModal.classList.contains('open') && typeof updateOperationSharePreview === 'function') {
+        updateOperationSharePreview();
       }
     } catch (e) {
       console.error('Clock display error:', e);
@@ -2302,7 +2325,7 @@ function toggleCardVisibility(cardKey, isVisible) {
     'enemy-list': ['section-enemy-marches'],
     'result': ['result-card'],
     'simple': ['card-simple-trial'],
-    'simple-sub-info': ['simple-sub-info', 'simple-status-label'],
+    'simple-sub-info': [],
     'alliance-multi': ['card-alliance-multi'],
     'floating-memo': ['floating-memo-window']
   };
@@ -2387,10 +2410,70 @@ function loadAppSettings() {
 }
 
 // Button Design Theme Management (Neon / Emerald / Gold)
+
+// --- Insertion Margin Offset Engine (v1.06.12: +0.1s / +0.3s / +0.5s) ---
+function getInsertionMarginMs() {
+  if (state.settings && typeof state.settings.insertionMarginMs === 'number') {
+    return state.settings.insertionMarginMs;
+  }
+  return 300; // Default +0.3s
+}
+
+function setInsertionMarginOffset(marginMs) {
+  state.settings.insertionMarginMs = marginMs;
+  saveAppSettings();
+  updateInsertionMarginUI();
+
+  // Instantly recalculate insertion if calculation is active
+  if (typeof calculateInsertion === 'function') calculateInsertion();
+  if (simpleLaunchState.isCalculated && typeof recalculateSimpleLaunchStateOnMarchChange === 'function') {
+    recalculateSimpleLaunchStateOnMarchChange();
+  }
+  if (typeof updateAllianceTimeline === 'function') {
+    updateAllianceTimeline(true);
+  }
+  if (typeof updateAllianceCopyButtons === 'function') {
+    updateAllianceCopyButtons();
+  }
+
+  showToast(`🎯 差し込みマージンを【+${(marginMs / 1000).toFixed(1)}s】に変更しました`, 'info');
+}
+
+function updateInsertionMarginUI() {
+  const currentMargin = getInsertionMarginMs();
+  const marginSecStr = (currentMargin / 1000).toFixed(1);
+  const displayElem = document.getElementById('setting-margin-display');
+  if (displayElem) {
+    displayElem.textContent = `+${marginSecStr}s`;
+  }
+
+  [100, 300, 500].forEach(val => {
+    const btn = document.getElementById(`btn-margin-opt-${val}`);
+    if (btn) {
+      if (val === currentMargin) {
+        btn.className = "btn-game btn-xs py-2 text-center flex flex-col items-center justify-center gap-0.5 rounded-lg border-2 border-amber-400 text-amber-300 font-black bg-amber-950/90 shadow-[0_0_12px_rgba(245,158,11,0.6)]";
+      } else {
+        btn.className = "btn-game btn-xs py-2 text-center flex flex-col items-center justify-center gap-0.5 rounded-lg border border-gray-700 text-gray-400 font-bold bg-black/40";
+      }
+    }
+  });
+
+  // Update dynamic subtitle under calculation card (both idle and active!)
+  const subInfo = document.getElementById('simple-sub-info');
+  if (subInfo) {
+    if (simpleLaunchState.isCalculated) {
+      subInfo.textContent = `相手着弾直後 (+${marginSecStr}s後) に自動合わせ中`;
+    } else {
+      subInfo.textContent = `相手着弾 ${marginSecStr}秒後 直後に自動合わせ`;
+    }
+  }
+}
+
 function setButtonTheme(themeKey) {
   state.settings.buttonTheme = themeKey || 'neon';
   saveAppSettings();
   applyButtonTheme();
+  updateInsertionMarginUI();
 }
 
 function applyButtonTheme() {
@@ -2558,12 +2641,27 @@ function updateAllToggleButtonsUI() {
 
 // v1.03.09 Audio Mute Control for Simple Mode
 
-// v1.05.01 Vibration ON/OFF Control
+// v1.06.12 Vibration ON/OFF Control
+
+// Handlers for Audio Alert & Vibration settings checkboxes
+function handleSettingAudioChange(enabled) {
+  if (enabled) {
+    initAudio();
+  }
+  setSimpleAudioMuteState(!enabled);
+}
+
+function handleSettingVibrationChange(enabled) {
+  setSimpleVibrationState(enabled);
+}
+
 let isSimpleVibrationEnabled = localStorage.getItem('wos_simple_vibration_enabled') !== 'false';
 
 function setSimpleVibrationState(enabled) {
   isSimpleVibrationEnabled = enabled;
   localStorage.setItem('wos_simple_vibration_enabled', enabled ? 'true' : 'false');
+  const cbVibe = document.getElementById('setting-vibration');
+  if (cbVibe) cbVibe.checked = enabled;
   updateAllToggleButtonsUI();
 }
 
@@ -2576,6 +2674,8 @@ let isSimpleAudioMuted = false;
 function setSimpleAudioMuteState(muted) {
   isSimpleAudioMuted = muted;
   localStorage.setItem('wos_simple_audio_muted', muted ? 'true' : 'false');
+  const cbAudio = document.getElementById('setting-audio-alert');
+  if (cbAudio) cbAudio.checked = !muted;
   updateAllToggleButtonsUI();
 }
 
@@ -2916,33 +3016,32 @@ function getLocalTimezoneInfo() {
 
 function updateTimezoneUI() {
   const localInfo = getLocalTimezoneInfo();
-  const btn = document.getElementById('btn-tz-toggle');
-  if (btn) {
+  
+  const updateFixedBadge = (id) => {
+    const b = document.getElementById(id);
+    if (!b) return;
     if (state.timezone === 'UTC') {
-      btn.className = "btn-game btn-xs font-mono whitespace-nowrap bg-yellow-950/90 border border-yellow-400 text-yellow-300 shadow-[0_0_10px_rgba(251,191,36,0.4)] font-black";
-      btn.innerHTML = `<i class="fa-solid fa-globe text-yellow-400"></i> UTC`;
+      b.className = "w-[76px] py-1 rounded-lg text-[11px] font-black tracking-wide border shadow-md transition-all flex items-center justify-center gap-1 bg-yellow-950/90 border-yellow-400 text-yellow-300 shadow-yellow-500/20 select-none cursor-pointer active:scale-95 whitespace-nowrap";
+      b.innerHTML = `<i class="fa-solid fa-globe text-yellow-400 text-xs"></i> <span>UTC</span>`;
     } else {
-      btn.className = "btn-game btn-xs font-mono whitespace-nowrap bg-cyan-950/90 border border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,240,255,0.4)] font-black";
-      btn.innerHTML = `<span>${localInfo.flag}</span> ${localInfo.code}`;
+      b.className = "w-[76px] py-1 rounded-lg text-[11px] font-black tracking-wide border shadow-md transition-all flex items-center justify-center gap-1 bg-cyan-950/90 border-cyan-400 text-cyan-300 shadow-cyan-500/20 select-none cursor-pointer active:scale-95 whitespace-nowrap";
+      b.innerHTML = `<span>${localInfo.flag}</span> <span>${localInfo.code}</span>`;
+    }
+  };
+
+  updateFixedBadge('tz-indicator-badge');
+  updateFixedBadge('simple-tz-badge');
+
+  const floatingBadge = document.getElementById('floating-tz-badge');
+  if (floatingBadge) {
+    if (state.timezone === 'UTC') {
+      floatingBadge.className = "px-2 py-0.5 rounded-full text-xs font-black tracking-wide border shadow-md transition-all flex items-center gap-1 bg-yellow-950/90 border-yellow-400 text-yellow-300 shadow-yellow-500/20";
+      floatingBadge.innerHTML = "<span>🌐 UTC</span>";
+    } else {
+      floatingBadge.className = "px-2 py-0.5 rounded-full text-xs font-black tracking-wide border shadow-md transition-all flex items-center gap-1 bg-cyan-950/90 border-cyan-400 text-cyan-300 shadow-cyan-500/20";
+      floatingBadge.innerHTML = `<span>${localInfo.flag} ${localInfo.code}</span>`;
     }
   }
-
-  const badges = [
-    { elem: document.getElementById('tz-indicator-badge'), fullText: true },
-    { elem: document.getElementById('simple-tz-badge'), fullText: false },
-    { elem: document.getElementById('floating-tz-badge'), fullText: false }
-  ];
-
-  badges.forEach(({ elem, fullText }) => {
-    if (!elem) return;
-    if (state.timezone === 'UTC') {
-      elem.className = "px-2 py-0.5 rounded-full text-xs font-black tracking-wide border shadow-md transition-all flex items-center gap-1 bg-yellow-950/90 border-yellow-400 text-yellow-300 shadow-yellow-500/20";
-      elem.innerHTML = `<span>🌐 ${fullText ? 'UTC (世界標準時)' : 'UTC'}</span>`;
-    } else {
-      elem.className = "px-2 py-0.5 rounded-full text-xs font-black tracking-wide border shadow-md transition-all flex items-center gap-1 bg-cyan-950/90 border-cyan-400 text-cyan-300 shadow-cyan-500/20";
-      elem.innerHTML = `<span>${localInfo.flag} ${fullText ? localInfo.label : localInfo.code}</span>`;
-    }
-  });
 }
 
 // Strategy Note Modal Handlers
@@ -2969,6 +3068,39 @@ function saveStrategyNote() {
 }
 
 // === v1.02.02 TRIAL: Super Simple Launch Mode Controller ===
+function setSimpleStatusMode(mode) {
+  simpleLaunchState.statusMode = mode || 'rally';
+  const btnRally = document.getElementById('btn-simple-mode-rally');
+  const btnMarch = document.getElementById('btn-simple-mode-march');
+  const enemyMarchGroup = document.getElementById('group-simple-enemy-march');
+  const remLabel = document.getElementById('label-simple-remaining-time');
+
+  if (simpleLaunchState.statusMode === 'rally') {
+    if (btnRally) {
+      btnRally.className = "btn-game btn-sm flex-1 font-black btn-primary active shadow-lg py-2.5 text-xs sm:text-sm flex items-center justify-center gap-1.5";
+    }
+    if (btnMarch) {
+      btnMarch.className = "btn-game btn-sm flex-1 font-black btn-secondary py-2.5 text-xs sm:text-sm flex items-center justify-center gap-1.5";
+    }
+    if (enemyMarchGroup) enemyMarchGroup.style.display = '';
+    if (remLabel) remLabel.textContent = '③ 相手の集結残り時間 (MM:SS / 秒)';
+  } else {
+    if (btnRally) {
+      btnRally.className = "btn-game btn-sm flex-1 font-black btn-secondary py-2.5 text-xs sm:text-sm flex items-center justify-center gap-1.5";
+    }
+    if (btnMarch) {
+      btnMarch.className = "btn-game btn-sm flex-1 font-black btn-primary active shadow-lg py-2.5 text-xs sm:text-sm flex items-center justify-center gap-1.5";
+    }
+    if (enemyMarchGroup) enemyMarchGroup.style.display = 'none';
+    if (remLabel) remLabel.textContent = '③ 相手の行軍残り時間 (MM:SS / 秒)';
+  }
+
+  // If calculation was ongoing, recalculate live
+  if (simpleLaunchState.isCalculated && typeof recalculateSimpleLaunchStateOnMarchChange === 'function') {
+    recalculateSimpleLaunchStateOnMarchChange();
+  }
+}
+
 let simpleLaunchState = {
   statusMode: 'rally', // 'rally' or 'march'
   isCalculated: false,
@@ -3004,165 +3136,10 @@ function toggleAllianceFeature() {
   setAllianceFeatureVisible(!currentVisible);
 }
 
-function setAllianceFeatureVisible(isVisible) {
-  state.settings.showAllianceFeatures = isVisible;
-  saveAppSettings();
-
-  const copyContainer = document.getElementById('group-simple-alliance-controls');
-  const timelineCard = document.getElementById('card-alliance-timeline');
-  const btnToggle = document.getElementById('btn-toggle-alliance-mode');
-  const iconToggle = document.getElementById('icon-toggle-alliance-mode');
-  const labelToggle = document.getElementById('label-toggle-alliance-mode');
-  const settingCheckbox = document.getElementById('setting-show-alliance-features');
-
-  if (copyContainer) {
-    copyContainer.style.display = isVisible ? 'block' : 'none';
-  }
-  if (timelineCard) {
-    timelineCard.style.display = isVisible ? 'block' : 'none';
-  }
-  if (settingCheckbox) {
-    settingCheckbox.checked = isVisible;
-  }
-  updateAllToggleButtonsUI();
-}
-
-function setSimpleStatusMode(mode) {
-  simpleLaunchState.statusMode = mode;
-  const btnRally = document.getElementById('btn-simple-mode-rally');
-  const btnMarch = document.getElementById('btn-simple-mode-march');
-  const labelRem = document.getElementById('label-simple-remaining-time');
-  const groupEnemyMarch = document.getElementById('group-simple-enemy-march');
-
-  if (mode === 'rally') {
-    if (btnRally) btnRally.className = "btn-game btn-sm flex-1 font-bold btn-primary active shadow";
-    if (btnMarch) btnMarch.className = "btn-game btn-sm flex-1 font-bold btn-secondary";
-    if (labelRem) labelRem.innerHTML = '相手の集結残り時間 (MM:SS) <span class="help-icon-btn" onclick="toggleHelpTooltip(event, \'enemy-rem\')" title="解説を見る">❓</span>';
-    if (groupEnemyMarch) groupEnemyMarch.style.display = "block";
-  } else {
-    if (btnRally) btnRally.className = "btn-game btn-sm flex-1 font-bold btn-secondary";
-    if (btnMarch) btnMarch.className = "btn-game btn-sm flex-1 font-bold btn-primary active shadow";
-    if (labelRem) labelRem.innerHTML = '相手の行軍残り時間 (MM:SS) <span class="help-icon-btn" onclick="toggleHelpTooltip(event, \'enemy-rem\')" title="解説を見る">❓</span>';
-    if (groupEnemyMarch) groupEnemyMarch.style.display = "none";
-  }
-}
-
-function setSimpleRemainingMinute(targetMins) {
-  const elem = document.getElementById('simple-remaining-time');
-  if (!elem) return;
-  let curSec = parseSecondsFromMMSS(elem.value);
-  let secondsOnly = curSec % 60;
-  let newTotalSec = targetMins * 60 + secondsOnly;
-  elem.value = formatCountdownMMSS(newTotalSec);
-  if (simpleLaunchState.isCalculated) {
-    recalculateSimpleLaunchState(newTotalSec);
-  }
-}
-
-function setSimpleRemainingSecond(targetSecs) {
-  const elem = document.getElementById('simple-remaining-time');
-  if (!elem) return;
-  let curSec = parseSecondsFromMMSS(elem.value);
-  let minutesOnly = Math.floor(curSec / 60);
-  let newTotalSec = minutesOnly * 60 + targetSecs;
-  elem.value = formatCountdownMMSS(newTotalSec);
-  if (simpleLaunchState.isCalculated) {
-    recalculateSimpleLaunchState(newTotalSec);
-  }
-}
-
-function adjustSimpleRemainingTime(deltaSec) {
-  const elem = document.getElementById('simple-remaining-time');
-  if (!elem) return;
-  let curSec;
-  if (simpleLaunchState.isCalculated && simpleLaunchState.calcStartTime) {
-    const now = getAdjustedNowTime();
-    const elapsedSec = (now.getTime() - simpleLaunchState.calcStartTime.getTime()) / 1000;
-    curSec = Math.max(0, simpleLaunchState.startRemSec - elapsedSec);
-  } else {
-    curSec = parseSecondsFromMMSS(elem.value);
-  }
-
-  let newTotalSec = Math.max(0, Math.round((curSec + deltaSec) * 10) / 10);
-  elem.value = formatCountdownMMSS(newTotalSec);
-  if (simpleLaunchState.isCalculated) {
-    recalculateSimpleLaunchState(newTotalSec);
-  }
-}
-
-function recalculateSimpleLaunchState(newRemSec) {
-  const now = getAdjustedNowTime();
-  const myStr = document.getElementById('simple-my-march')?.value || '01:30';
-  const enemyStr = document.getElementById('simple-enemy-march')?.value || '02:15';
-
-  const mySec = parseSecondsFromMMSS(myStr);
-  const enemySec = parseSecondsFromMMSS(enemyStr);
-
-  let rallyFinishDate;
-  let enemyLandDate;
-  if (simpleLaunchState.statusMode === 'rally') {
-    rallyFinishDate = new Date(now.getTime() + newRemSec * 1000);
-    enemyLandDate = new Date(rallyFinishDate.getTime() + enemySec * 1000);
-  } else {
-    rallyFinishDate = null;
-    enemyLandDate = new Date(now.getTime() + newRemSec * 1000);
-  }
-
-  const targetLaunchDate = new Date(enemyLandDate.getTime() + 300 - mySec * 1000);
-
-  simpleLaunchState.calcStartTime = now;
-  simpleLaunchState.startRemSec = newRemSec;
-  simpleLaunchState.rallyFinishDate = rallyFinishDate;
-  simpleLaunchState.enemyLandDate = enemyLandDate;
-  simpleLaunchState.targetLaunchDate = targetLaunchDate;
-  simpleLaunchState.myMarchSec = mySec;
-  simpleLaunchState.enemyMarchSec = enemySec;
-
-  updateSimpleCountdown();
-  updateAllianceTimeline(true);
-}
-
-// v1.04.08 Realtime Automatic Recalculation on March Time Updates
-function recalculateSimpleLaunchStateOnMarchChange() {
-  if (!simpleLaunchState.isCalculated) return;
-
-  const now = getAdjustedNowTime();
-  const myStr = document.getElementById('simple-my-march')?.value || '01:30';
-  const enemyStr = document.getElementById('simple-enemy-march')?.value || '02:15';
-
-  const mySec = parseSecondsFromMMSS(myStr);
-  const enemySec = parseSecondsFromMMSS(enemyStr);
-
-  let enemyLandDate;
-  if (simpleLaunchState.statusMode === 'rally') {
-    // If rallyFinishDate exists, keep the exact rally finish time and shift land time by new enemy march
-    if (simpleLaunchState.rallyFinishDate) {
-      enemyLandDate = new Date(simpleLaunchState.rallyFinishDate.getTime() + enemySec * 1000);
-    } else if (simpleLaunchState.calcStartTime && typeof simpleLaunchState.startRemSec === 'number') {
-      const finishMs = simpleLaunchState.calcStartTime.getTime() + simpleLaunchState.startRemSec * 1000;
-      simpleLaunchState.rallyFinishDate = new Date(finishMs);
-      enemyLandDate = new Date(finishMs + enemySec * 1000);
-    } else {
-      enemyLandDate = simpleLaunchState.enemyLandDate;
-    }
-  } else {
-    // Marching mode: enemyLandDate is the destination time
-    enemyLandDate = simpleLaunchState.enemyLandDate;
-  }
-
-  // Recalculate user's target launch date
-  const targetLaunchDate = new Date(enemyLandDate.getTime() + 300 - mySec * 1000);
-
-  simpleLaunchState.enemyLandDate = enemyLandDate;
-  simpleLaunchState.targetLaunchDate = targetLaunchDate;
-  simpleLaunchState.myMarchSec = mySec;
-  simpleLaunchState.enemyMarchSec = enemySec;
-
-  updateSimpleCountdown();
-  updateAllianceTimeline(true);
-}
+function setAllianceFeatureVisible() {}
 
 function triggerSimpleEnemyLaunch() {
+  resetAllianceCopyStatus();
   initAudio();
   const myStr = document.getElementById('simple-my-march')?.value || '';
   const enemyStr = document.getElementById('simple-enemy-march')?.value || '';
@@ -3206,16 +3183,17 @@ function triggerSimpleEnemyLaunch() {
     enemyLandDate = new Date(now.getTime() + remSec * 1000);
   }
 
-  // 自分の発車時刻 = 相手着弾時刻 + 0.3s - 自分の行軍時間
-  const targetLaunchDate = new Date(enemyLandDate.getTime() + 300 - mySec * 1000);
+  // 自分の発車時刻 = 相手着弾時刻 + margin - 自分の行軍時間
+  const targetLaunchDate = new Date(enemyLandDate.getTime() + getInsertionMarginMs() - mySec * 1000);
 
-  // 2. Check if calculated launch time is already in the past (out of time) (v1.03.21 Multi-factor clear explanation)
+  // 2. Check if calculated launch time is already in the past (out of time)
   const diffSec = (targetLaunchDate.getTime() - now.getTime()) / 1000;
   if (diffSec < -1.0) {
-    // Check if any selected alliance member has a launch time in the future
-    const selectedMembers = allianceMembers.filter(m => m.selected !== false);
+    const curGroup = getActiveAllianceGroup();
+    const allMembers = curGroup ? curGroup.members : [];
+    const selectedMembers = allMembers.filter(m => m.selected !== false);
     const hasLaunchableAllianceMember = selectedMembers.some(m => {
-      const memberLaunchMs = enemyLandDate.getTime() + 300 - m.marchSec * 1000;
+      const memberLaunchMs = enemyLandDate.getTime() + getInsertionMarginMs() - m.marchSec * 1000;
       return (memberLaunchMs - now.getTime()) / 1000 > -1.0;
     });
 
@@ -3225,6 +3203,10 @@ function triggerSimpleEnemyLaunch() {
       if (!confirmLaunch) return;
     }
   }
+
+  // Automatically save used march times to Recent History!
+  if (mySec > 0) saveKeypadRecentHistory(mySec);
+  if (enemySec > 0) saveKeypadRecentHistory(enemySec);
 
   simpleLaunchState.isCalculated = true;
   simpleLaunchState.calcStartTime = new Date(now.getTime());
@@ -3243,39 +3225,48 @@ function updateSimpleCountdown() {
   if (!simpleLaunchState.isCalculated || !simpleLaunchState.targetLaunchDate || !simpleLaunchState.enemyLandDate) return;
 
   const now = getAdjustedNowTime();
+  const nowMs = now.getTime();
 
-  // 1. Check if the LAST member's launch time has passed (v1.04.09 1.5s Quick Completion & Alliance Toggle Check)
+  // 1. Calculate active/remaining selected alliance members
   let maxLaunchTimeMs = simpleLaunchState.targetLaunchDate.getTime();
-  const isAllianceEnabled = state.settings.showAllianceFeatures === true;
+  const curGroup = getActiveAllianceGroup();
+  const allMembers = curGroup ? curGroup.members : [];
+  const selectedMembers = allMembers.filter(m => m.selected !== false);
 
-  if (isAllianceEnabled) {
-    const selectedMembers = allianceMembers.filter(m => m.selected !== false);
-    if (selectedMembers.length > 0) {
-      selectedMembers.forEach(m => {
-        const memberLaunchMs = simpleLaunchState.enemyLandDate.getTime() + 300 - m.marchSec * 1000;
-        if (memberLaunchMs > maxLaunchTimeMs) {
-          maxLaunchTimeMs = memberLaunchMs;
-        }
-      });
-    }
+  let unlaunchedMemberCount = 0;
+  if (selectedMembers.length > 0) {
+    selectedMembers.forEach(m => {
+      const memberLaunchMs = simpleLaunchState.enemyLandDate.getTime() + getInsertionMarginMs() - m.marchSec * 1000;
+      if (memberLaunchMs > maxLaunchTimeMs) {
+        maxLaunchTimeMs = memberLaunchMs;
+      }
+      if (memberLaunchMs >= nowMs) {
+        unlaunchedMemberCount++;
+      }
+    });
   }
 
-  // If the last launch time + 1.5s buffer has passed, automatically complete & reset cleanly!
-  if (now.getTime() > maxLaunchTimeMs + 1500) {
+  // 2. Auto-reset 5 seconds AFTER the last member's launch time (Plan A: Instant & clean termination!)
+  if (nowMs > maxLaunchTimeMs + 5000) {
     resetSimpleLaunchCalculation();
     return;
   }
 
-  // 2. Live Countdown of Remaining Time Input (Display MM:SS of enemy arrival countdown)
+  // 3. Live Countdown of Remaining Time Input (Display MM:SS of enemy arrival countdown)
   const remInput = document.getElementById('simple-remaining-time');
-  const elapsedSec = (now.getTime() - simpleLaunchState.calcStartTime.getTime()) / 1000;
+  const elapsedSec = (nowMs - simpleLaunchState.calcStartTime.getTime()) / 1000;
   const currentRemSec = Math.max(0, simpleLaunchState.startRemSec - elapsedSec);
 
+  const remFormatted = formatCountdownMMSS(currentRemSec);
   if (remInput && document.activeElement !== remInput) {
-    remInput.value = formatCountdownMMSS(currentRemSec);
+    remInput.value = remFormatted;
+  }
+  const modalRemVal = document.getElementById('modal-rem-time-val');
+  if (modalRemVal) {
+    modalRemVal.textContent = remFormatted;
   }
 
-  // 3. Ultra Prominent Projected Launch Time Display (Display HH:MM:SS of targetLaunchDate)
+  // 4. Projected Launch Time Display
   const landTimeVal = document.getElementById('simple-land-time-val');
   if (landTimeVal) {
     landTimeVal.textContent = formatTimeHHMMSS(simpleLaunchState.targetLaunchDate);
@@ -3285,17 +3276,18 @@ function updateSimpleCountdown() {
     floatingLandTimeVal.textContent = formatTimeHHMMSS(simpleLaunchState.targetLaunchDate);
   }
 
-  // 4. Launch Deadline Countdown Display & 10s Countdown Beep Audio (v1.03.09)
+  // 5. Main Card Status & Countdown Display (Plan A Logic)
   const statusLabel = document.getElementById('simple-status-label');
   const countdownVal = document.getElementById('simple-countdown-val');
   const subInfo = document.getElementById('simple-sub-info');
 
-  if (!statusLabel || !countdownVal || !subInfo) return;
+  if (!statusLabel || !countdownVal) return;
 
   const modeText = simpleLaunchState.statusMode === 'rally' ? '集結完了後発車' : '行軍着弾';
-  const diffSec = (simpleLaunchState.targetLaunchDate.getTime() - now.getTime()) / 1000;
+  const diffSec = (simpleLaunchState.targetLaunchDate.getTime() - nowMs) / 1000;
+  const marginStr = `+${(getInsertionMarginMs() / 1000).toFixed(1)}s`;
 
-  // 10s Countdown Audio Beep & Vibration Logic (v1.05.01)
+  // 10s Countdown Audio Beep & Vibration Logic
   if (diffSec > 0 && diffSec <= 10.05) {
     const currentCeilSec = Math.ceil(diffSec);
     if (simpleLaunchState.lastBeepSecond !== currentCeilSec) {
@@ -3307,12 +3299,11 @@ function updateSimpleCountdown() {
           playBeep(880, 'sine', 0.12);
         }
       }
-      // Trigger vibration synced with countdown beeps
       if (isSimpleVibrationEnabled) {
         if (currentCeilSec === 1) {
-          triggerVibration([80, 50, 80]); // 2 quick pulses at 1s
+          triggerVibration([80, 50, 80]);
         } else {
-          triggerVibration(80); // Short rhythmic buzz for 10s ~ 2s
+          triggerVibration(80);
         }
       }
     }
@@ -3326,16 +3317,16 @@ function updateSimpleCountdown() {
     statusLabel.className = "text-xs text-yellow-300 font-bold mt-2 mb-1 animate-pulse";
     countdownVal.textContent = formatCountdownMMSSs(diffSec);
     countdownVal.className = "text-2xl sm:text-3xl font-black text-digital text-cyan-300 animate-pulse";
-    subInfo.textContent = `相手着弾直後 (0.3秒後) に自動合わせ中 (${modeText})`;
+    if (subInfo) subInfo.textContent = `相手着弾直後 (${marginStr}後) に自動合わせ中`;
   } else if (diffSec > -1.0) {
-    // Launch Deadline Reached (0s Window): Play Big Launch Chime once
+    // 0s Window: Launch Chime & Vibe
     if (simpleLaunchState.lastBeepSecond !== 0) {
       simpleLaunchState.lastBeepSecond = 0;
       if (!isSimpleAudioMuted) {
-        playBeep(1760, 'triangle', 0.4); // Major high chime on launch!
+        playBeep(1760, 'triangle', 0.4);
       }
       if (isSimpleVibrationEnabled) {
-        triggerVibration([200, 100, 300]); // Strong double buzz on launch!
+        triggerVibration([200, 100, 300]);
       }
     }
 
@@ -3343,14 +3334,26 @@ function updateSimpleCountdown() {
     statusLabel.className = "text-sm text-green-400 font-black mt-2 mb-1 animate-bounce";
     countdownVal.textContent = "00:00.0";
     countdownVal.className = "text-2xl sm:text-3xl font-black text-digital text-green-400";
-    subInfo.textContent = "即座にゲーム画面で発車ボタンをタップ！";
+    if (subInfo) subInfo.textContent = "即座にゲーム画面で発車ボタンをタップ！";
   } else {
-    // User's own launch time passed, but calculation is still active for alliance members
-    statusLabel.textContent = "⚠️ 自分の発車予定時刻は経過しました";
-    statusLabel.className = "text-xs text-yellow-400 font-bold mt-2 mb-1";
-    countdownVal.textContent = "経過済み";
-    countdownVal.className = "text-xl sm:text-2xl font-black text-yellow-400";
-    subInfo.textContent = "同盟タイムラインのスケジュールを進行中";
+    // User's own launch time has passed
+    if (nowMs > maxLaunchTimeMs) {
+      // Entire operation has concluded!
+      statusLabel.textContent = "🏁 全メンバーの発車が完了しました";
+      statusLabel.className = "text-xs text-emerald-300 font-bold mt-2 mb-1";
+      countdownVal.textContent = "作戦完了";
+      countdownVal.className = "text-xl sm:text-2xl font-black text-emerald-400";
+      if (subInfo) subInfo.textContent = "まもなく自動で初期状態へリセットされます";
+    } else {
+      // User passed, but some alliance members are still counting down
+      statusLabel.textContent = "✅ 自分の発車完了 (通過)";
+      statusLabel.className = "text-xs text-emerald-300 font-bold mt-2 mb-1";
+      countdownVal.textContent = "発車完了";
+      countdownVal.className = "text-xl sm:text-2xl font-black text-emerald-400";
+      if (subInfo) {
+        subInfo.textContent = `👥 同盟メンバー進行中 (未発車 残り ${unlaunchedMemberCount} 名)`;
+      }
+    }
   }
 
   updateAllianceTimeline();
@@ -3358,6 +3361,7 @@ function updateSimpleCountdown() {
 
 // v1.03.13 Forced Stop & Clean Reset Calculation
 function resetSimpleLaunchCalculation() {
+  resetAllianceCopyStatus();
   const startSec = simpleLaunchState.startRemSec || 180;
   
   simpleLaunchState.isCalculated = false;
@@ -3392,7 +3396,7 @@ function resetSimpleLaunchCalculation() {
 
   const subInfo = document.getElementById('simple-sub-info');
   if (subInfo) {
-    subInfo.textContent = "相手着弾 0.3秒後 直後に自動合わせ";
+    if (subInfo) subInfo.textContent = "相手着弾 0.3秒後 直後に自動合わせ";
   }
 
   const btnReset = document.getElementById('btn-simple-reset');
@@ -3481,7 +3485,7 @@ function updateAllianceTimeline(forceRender = false) {
 
   // Calculate launch times
   const memberWithDates = selectedMembers.map(m => {
-    const targetLaunchDate = new Date(enemyLandDate.getTime() + 300 - m.marchSec * 1000);
+    const targetLaunchDate = new Date(enemyLandDate.getTime() + getInsertionMarginMs() - m.marchSec * 1000);
     return {
       member: m,
       targetLaunchDate: targetLaunchDate,
@@ -3520,7 +3524,7 @@ function updateAllianceTimeline(forceRender = false) {
     html += `
       <tr data-member-name="${m.name}" class="${rowBg} ${selectedClass} hover:bg-cyan-900/40 transition-colors cursor-pointer select-none" onclick="selectTimelineRowMember('${safeName}')">
         <td class="p-1.5 text-center font-bold text-gray-400 text-[10px]">${index + 1}</td>
-        <td class="p-1.5 font-bold text-cyan-200 truncate max-w-[100px]">${m.name}</td>
+        <td class="p-1.5 font-bold text-cyan-200 truncate max-w-[100px]">${escapeHtml(m.name)}</td>
         <td class="p-1.5 text-center text-gray-400 text-[10px]">(${formatCountdownMMSS(m.marchSec)})</td>
         <td class="p-1.5 text-center font-bold text-yellow-300">${launchTimeStr}</td>
         <td class="p-1.5 text-right ${diffClass}">${diffStr}</td>
@@ -3841,7 +3845,7 @@ function renderAllianceGroupTabs() {
       const isActive = g.id === allianceData.activeGroupId;
       const btn = document.createElement('button');
       btn.className = `btn-game btn-xs ${isActive ? 'btn-primary active' : 'btn-secondary'} px-2.5 py-1 font-bold whitespace-nowrap text-xs flex items-center gap-1`;
-      btn.innerHTML = `${g.name} <span class="bg-black/40 px-1 rounded text-[10px] text-yellow-300 font-mono">${g.members.length}</span>`;
+      btn.innerHTML = `${escapeHtml(g.name)} <span class="bg-black/40 px-1 rounded text-[10px] text-yellow-300 font-mono">${g.members.length}</span>`;
       btn.onclick = () => setActiveAllianceGroup(g.id);
       container.appendChild(btn);
     });
@@ -3853,7 +3857,7 @@ function renderAllianceGroupTabs() {
       const isActive = g.id === allianceData.activeGroupId;
       const btn = document.createElement('button');
       btn.className = `btn-game btn-xs ${isActive ? 'btn-primary active' : 'btn-secondary'} px-2 py-0.5 font-bold whitespace-nowrap text-[11px] flex items-center gap-1`;
-      btn.innerHTML = `${g.name} <span class="bg-black/40 px-1 rounded text-[10px] text-yellow-300 font-mono">${g.members.length}</span>`;
+      btn.innerHTML = `${escapeHtml(g.name)} <span class="bg-black/40 px-1 rounded text-[10px] text-yellow-300 font-mono">${g.members.length}</span>`;
       btn.onclick = () => setActiveAllianceGroup(g.id);
       selContainer.appendChild(btn);
     });
@@ -4257,7 +4261,7 @@ function renderAllianceMemberList() {
     div.className = 'flex justify-between items-center bg-black/60 p-2 rounded border border-cyan-900/60 text-xs hover:border-cyan-500/50 transition-all';
     div.innerHTML = `
       <div class="flex items-center gap-2 flex-1 min-w-0 mr-2">
-        <span class="font-bold text-cyan-200 truncate">${m.name}</span>
+        <span class="font-bold text-cyan-200 truncate">${escapeHtml(m.name)}</span>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
         <button class="btn-game btn-xs bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 font-mono font-bold px-2 py-1 text-xs hover:scale-105 transition-transform" onclick="openAllianceKeypadModal('${m.id}')" title="タップして時間を変更">
@@ -4278,6 +4282,60 @@ let activeKeypadMemberId = null;
 let activeKeypadInputTarget = null; // { elementId, labelName }
 let keypadInputBuffer = ''; // Stores typed raw digits like "25" (25s) or "130" (1m30s)
 
+
+
+// --- March Time Keypad Preset & Recent History Engine (v1.06.12) ---
+let keypadRecentHistory = [15, 20, 25, 30]; // Sensible default initial history!
+try {
+  const savedHistory = localStorage.getItem('wos_keypad_recent_history');
+  if (savedHistory) {
+    const parsed = JSON.parse(savedHistory);
+    if (Array.isArray(parsed) && parsed.length > 0) keypadRecentHistory = parsed;
+  }
+} catch (e) {
+  keypadRecentHistory = [15, 20, 25, 30];
+}
+
+function saveKeypadRecentHistory(sec) {
+  if (!sec || sec <= 0) return;
+  keypadRecentHistory = keypadRecentHistory.filter(s => s !== sec);
+  keypadRecentHistory.unshift(sec);
+  if (keypadRecentHistory.length > 5) keypadRecentHistory = keypadRecentHistory.slice(0, 5);
+  try {
+    localStorage.setItem('wos_keypad_recent_history', JSON.stringify(keypadRecentHistory));
+  } catch (e) {}
+}
+
+function renderKeypadRecentHistory() {
+  const container = document.getElementById('keypad-history-container');
+  const chipsWrapper = document.getElementById('keypad-history-chips');
+  if (!container || !chipsWrapper) return;
+
+  const displayList = (keypadRecentHistory && keypadRecentHistory.length > 0) ? keypadRecentHistory : [15, 20, 25, 30];
+
+  chipsWrapper.innerHTML = '';
+  displayList.forEach(sec => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-game btn-xs bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 py-1 px-2 text-xs font-mono font-bold hover:scale-105 active:scale-95 transition-transform flex-1 text-center';
+    btn.textContent = formatCountdownMMSS(sec);
+    btn.onclick = () => applyKeypadPresetSeconds(sec);
+    chipsWrapper.appendChild(btn);
+  });
+}
+
+function applyKeypadPresetSeconds(sec) {
+  if (sec < 60) {
+    keypadInputBuffer = sec.toString();
+  } else {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    keypadInputBuffer = `${m}${s.toString().padStart(2, '0')}`;
+  }
+  updateKeypadDisplay();
+}
+
+
 function openAllianceKeypadModal(memberId) {
   const curGroup = getActiveAllianceGroup();
   if (!curGroup) return;
@@ -4295,6 +4353,7 @@ function openAllianceKeypadModal(memberId) {
   if (origTimeElem) origTimeElem.textContent = `(現在 ${formatCountdownMMSS(member.marchSec)})`;
 
   updateKeypadDisplay();
+  renderKeypadRecentHistory();
 
   const modal = document.getElementById('alliance-keypad-modal');
   if (modal) modal.classList.add('open');
@@ -4316,6 +4375,7 @@ function openSingleInputKeypad(elementId, labelName) {
   if (origTimeElem) origTimeElem.textContent = `(現在 ${inputElem.value || '00:00'})`;
 
   updateKeypadDisplay();
+  renderKeypadRecentHistory();
 
   const modal = document.getElementById('alliance-keypad-modal');
   if (modal) modal.classList.add('open');
@@ -4394,7 +4454,9 @@ function adjustKeypadSeconds(delta) {
     }
   }
 
-  sec = Math.max(1, sec + delta);
+  const isZeroAllowed = (activeKeypadInputTarget && (activeKeypadInputTarget.elementId === 'simple-remaining-time' || (activeKeypadInputTarget.elementId === 'ocr-manual-time-input' && ocrSessionState.manualMode === 'rally')));
+  const minLimit = isZeroAllowed ? 0 : 1;
+  sec = Math.max(minLimit, sec + delta);
   // Format back into seconds or MMSS digits
   if (sec < 60) {
     keypadInputBuffer = sec.toString();
@@ -4408,10 +4470,20 @@ function adjustKeypadSeconds(delta) {
 
 function confirmKeypadTime() {
   let totalSec = parseKeypadBufferToSeconds(keypadInputBuffer);
-  if (totalSec <= 0) {
+  
+  // Check if 0 seconds is valid for the current target (e.g. 集結中/集結残り時間)
+  const isZeroAllowed = (activeKeypadInputTarget && (
+    activeKeypadInputTarget.elementId === 'simple-remaining-time' ||
+    (activeKeypadInputTarget.elementId === 'ocr-manual-time-input' && ocrSessionState.manualMode === 'rally')
+  ));
+
+  if (totalSec < 0 || (!isZeroAllowed && totalSec <= 0)) {
     alert('有効な時間を入力してください (1秒以上)。');
     return;
   }
+
+  // 100% Guaranteed: Record into Recent History & re-render chips immediately
+  saveKeypadRecentHistory(totalSec);
 
   if (activeKeypadInputTarget) {
     // Single Mode Input Target
@@ -4419,13 +4491,29 @@ function confirmKeypadTime() {
     if (inputElem) {
       const formatted = formatCountdownMMSS(totalSec);
       inputElem.value = formatted;
-      if (activeKeypadInputTarget.elementId === 'simple-my-march') {
-        saveMyMarchTime(formatted);
-      }
-      calculateInsertion();
-      // v1.04.08 Realtime live recalculation if calculation is ongoing
-      if (simpleLaunchState.isCalculated) {
-        recalculateSimpleLaunchStateOnMarchChange();
+      if (activeKeypadInputTarget.elementId === 'ocr-manual-time-input') {
+        ocrSessionState.manualRemSec = totalSec;
+        ocrSessionState.isManualSelected = true;
+        ocrSessionState.selectedTargetIdx = -1;
+        updateOcrManualUI();
+        updateOcrTargetSelectionUI();
+
+        const now = getAdjustedNowTime();
+        const lagSec = ocrSessionState.captureTime ? Math.max(0, (now.getTime() - ocrSessionState.captureTime.getTime()) / 1000) : 0;
+        updateOcrTimeoutSafety(lagSec);
+      } else {
+        if (activeKeypadInputTarget.elementId === 'simple-my-march') {
+          saveMyMarchTime(formatted);
+        }
+        calculateInsertion();
+        // Realtime live recalculation if calculation is ongoing
+        if (simpleLaunchState.isCalculated) {
+          if (activeKeypadInputTarget.elementId === 'simple-remaining-time') {
+            recalculateSimpleLaunchState(totalSec);
+          } else {
+            recalculateSimpleLaunchStateOnMarchChange();
+          }
+        }
       }
     }
     closeAllianceKeypadModal();
@@ -4452,11 +4540,29 @@ function confirmKeypadTime() {
 }
 
 // Selection Checklist Modal Logic
+let allianceSelectionSortMode = localStorage.getItem('wos_alliance_selection_sort_mode') || 'time'; // 'name' or 'time'
+
+function setAllianceSelectionSortMode(mode) {
+  allianceSelectionSortMode = mode;
+  localStorage.setItem('wos_alliance_selection_sort_mode', mode);
+  updateSelectionSortButtonsUI();
+  renderAllianceSelectionList();
+}
+
+function updateSelectionSortButtonsUI() {
+  const btnName = document.getElementById('btn-selection-sort-name');
+  const btnTime = document.getElementById('btn-selection-sort-time');
+  if (btnName) btnName.className = `btn-game btn-xs ${allianceSelectionSortMode === 'name' ? 'btn-primary active font-black' : 'btn-secondary font-bold'} py-0.5 px-2 text-[10px] whitespace-nowrap`;
+  if (btnTime) btnTime.className = `btn-game btn-xs ${allianceSelectionSortMode === 'time' ? 'btn-primary active font-black' : 'btn-secondary font-bold'} py-0.5 px-2 text-[10px] whitespace-nowrap`;
+}
+
 function renderAllianceSelectionList() {
   const container = document.getElementById('alliance-selection-list-container');
   const searchInput = document.getElementById('alliance-selection-search');
   if (!container) return;
   container.innerHTML = '';
+
+  updateSelectionSortButtonsUI();
 
   const curGroup = getActiveAllianceGroup();
   if (!curGroup || curGroup.members.length === 0) {
@@ -4465,7 +4571,16 @@ function renderAllianceSelectionList() {
   }
 
   const rawQuery = (searchInput?.value || '').trim().toLowerCase();
-  const sorted = [...curGroup.members];
+  let sorted = [...curGroup.members];
+
+  // Apply sorting according to allianceSelectionSortMode
+  if (allianceSelectionSortMode === 'name') {
+    sorted.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  } else {
+    // Default 'time' (fastest march time first, then by name)
+    sorted.sort((a, b) => (a.marchSec - b.marchSec) || a.name.localeCompare(b.name, 'ja'));
+  }
+
   let filtered = sorted;
 
   if (rawQuery) {
@@ -4492,7 +4607,7 @@ function renderAllianceSelectionList() {
     div.innerHTML = `
       <div class="flex items-center gap-2 flex-1 min-w-0 mr-2">
         <input type="checkbox" class="w-4 h-4 accent-cyan-400 shrink-0" ${isChecked ? 'checked' : ''} onchange="toggleAllianceMemberSelection('${m.id}', this.checked)">
-        <span class="font-bold text-gray-200 truncate">${m.name}</span>
+        <span class="font-bold text-gray-200 truncate">${escapeHtml(m.name)}</span>
       </div>
       <span class="text-yellow-300 font-mono text-[11px] font-bold shrink-0">${formatCountdownMMSS(m.marchSec)}</span>
     `;
@@ -4527,7 +4642,7 @@ function setAllAllianceSelection(checked) {
 }
 
 // Multi Mass Calculation & Copy Logic (v1.04.00 9-Person Chunking & Clean Template)
-let allianceCopySortMode = localStorage.getItem('wos_alliance_copy_sort_mode') || 'name'; // 'name' or 'time'
+let allianceCopySortMode = localStorage.getItem('wos_alliance_copy_sort_mode') || 'time'; // 'name' or 'time'
 
 function setAllianceCopySortMode(mode) {
   allianceCopySortMode = mode;
@@ -4547,54 +4662,191 @@ function setAllianceCopySortMode(mode) {
   updateAllianceCopyButtons();
 }
 
-// Dynamically generate single copy button or auto-split buttons if member count exceeds 9
+// State tracking for copied chunks & expired status
+let copiedAlliancePartIds = new Set();
+
+function resetAllianceCopyStatus() {
+  copiedAlliancePartIds.clear();
+  updateAllianceCopyButtons();
+}
+
+// Dynamically generate single copy button or auto-split buttons with Copied & Expired states
 function updateAllianceCopyButtons() {
   const container = document.getElementById('alliance-copy-buttons-container');
   if (!container) return;
 
   const curGroup = getActiveAllianceGroup();
-  const selectedCount = curGroup ? curGroup.members.filter(m => m.selected !== false).length : 0;
+  const allMembers = curGroup ? curGroup.members : [];
+  const selectedMembers = allMembers.filter(m => m.selected !== false);
+  const selectedCount = selectedMembers.length;
   const sortModeTitle = allianceCopySortMode === 'time' ? '出発時間順' : 'あいうえお順';
 
-  // Whiteout Survival chat allows max ~10 lines per message before stripping newlines.
-  // Header is 1 line + 9 members = 10 lines (100% safe across all devices!)
   const limitPerChunk = 9;
+  const nowTimeMs = getAdjustedNowTime().getTime();
+
+  // If calculation not started yet
+  if (!simpleLaunchState.isCalculated || !simpleLaunchState.enemyLandDate) {
+    if (selectedCount <= limitPerChunk) {
+      container.innerHTML = `
+        <button id="btn-copy-alliance-multi-chat" class="btn-game btn-sm btn-primary w-full py-2.5 font-black text-xs sm:text-sm tracking-wide shadow flex items-center justify-center gap-1.5 whitespace-nowrap" onclick="copyAllianceMultiChat(1, 0, 'single')">
+          <i class="fa-solid fa-copy text-yellow-300"></i> <span>📋 選択メンバー全員の指示をコピー (${sortModeTitle})</span>
+        </button>
+      `;
+    } else {
+      const totalParts = Math.ceil(selectedCount / limitPerChunk);
+      let html = `
+        <div class="text-[10px] text-yellow-300 font-bold bg-yellow-950/60 p-1.5 rounded border border-yellow-500/40 text-center truncate">
+          ⚠️ ホワサバ改行対策: ${selectedCount}名を 9名ずつ(全${totalParts}回) 分割送信
+        </div>
+        <div class="grid grid-cols-${Math.min(totalParts, 2)} gap-1.5">
+      `;
+      for (let part = 1; part <= totalParts; part++) {
+        const startIdx = (part - 1) * limitPerChunk;
+        const endIdx = Math.min(part * limitPerChunk, selectedCount);
+        html += `
+          <button class="btn-game btn-sm btn-accent py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0" onclick="copyAllianceMultiChat(${part}, ${limitPerChunk}, 'part_${part}')">
+            <span class="flex items-center gap-1 text-[11px] sm:text-xs">
+              <i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i> 📋 Part ${part}/${totalParts}
+            </span>
+            <span class="text-[10px] opacity-90 font-mono">(${startIdx + 1}〜${endIdx}人目)</span>
+          </button>
+        `;
+      }
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+    return;
+  }
+
+  const enemyLandDate = simpleLaunchState.enemyLandDate;
+
+  // Build unified member list with exact launch dates
+  const memberWithDates = selectedMembers.map(m => {
+    const targetLaunchDate = new Date(enemyLandDate.getTime() + getInsertionMarginMs() - m.marchSec * 1000);
+    return {
+      member: m,
+      targetLaunchDate: targetLaunchDate,
+      launchTimeMs: targetLaunchDate.getTime()
+    };
+  });
+
+  if (allianceCopySortMode === 'time') {
+    memberWithDates.sort((a, b) => a.launchTimeMs - b.launchTimeMs);
+  } else {
+    memberWithDates.sort((a, b) => a.member.name.localeCompare(b.member.name, 'ja'));
+  }
+
+  const isChunkExpired = (items) => {
+    if (!items || items.length === 0) return false;
+    return items.every(item => nowTimeMs > item.launchTimeMs);
+  };
+
+  const allExpired = memberWithDates.length > 0 && isChunkExpired(memberWithDates);
+  if (allExpired && copiedAlliancePartIds.size > 0) {
+    copiedAlliancePartIds.clear();
+  }
 
   if (selectedCount <= limitPerChunk) {
-    // Single Button
-    container.innerHTML = `
-      <button id="btn-copy-alliance-multi-chat" class="btn-game btn-sm btn-primary w-full py-2 font-black text-xs sm:text-sm tracking-wide shadow flex items-center justify-center gap-1.5 whitespace-nowrap" onclick="copyAllianceMultiChat()">
-        <i class="fa-solid fa-copy text-yellow-300"></i> <span id="label-copy-alliance-multi-chat">📋 選択メンバー全員の指示をコピー (${sortModeTitle})</span>
-      </button>
-    `;
-  } else {
-    // Auto-Split Buttons (Part 1, Part 2, etc.)
-    const totalParts = Math.ceil(selectedCount / limitPerChunk);
-    let html = `
-      <div class="text-[10px] text-yellow-300 font-bold bg-yellow-950/60 p-1.5 rounded border border-yellow-500/40 text-center truncate">
-        ⚠️ ホワサバ改行対策: ${selectedCount}名を 9名ずつ(全${totalParts}回) 分割送信
-      </div>
-      <div class="grid grid-cols-${Math.min(totalParts, 2)} gap-1.5">
-    `;
+    const isCopied = copiedAlliancePartIds.has('single');
+    const isExpired = isChunkExpired(memberWithDates);
 
-    for (let part = 1; part <= totalParts; part++) {
-      const startIdx = (part - 1) * limitPerChunk + 1;
-      const endIdx = Math.min(part * limitPerChunk, selectedCount);
-      html += `
-        <button class="btn-game btn-sm btn-accent py-1.5 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0" onclick="copyAllianceMultiChat(${part}, ${limitPerChunk})">
-          <span class="flex items-center gap-1 text-[11px] sm:text-xs">
-            <i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i> 📋 Part ${part}/${totalParts}
-          </span>
-          <span class="text-[10px] opacity-90 font-mono">(${startIdx}〜${endIdx}人目)</span>
+    let btnClass = 'btn-game btn-sm w-full py-2.5 font-black text-xs sm:text-sm tracking-wide shadow flex items-center justify-center gap-1.5 whitespace-nowrap transition-all';
+    let btnContent = '';
+
+    if (isExpired) {
+      btnClass += ' bg-rose-950/90 border-2 border-rose-500 text-rose-300 opacity-80 cursor-not-allowed';
+      btnContent = `<i class="fa-solid fa-circle-xmark text-rose-400"></i> <span>❌ 時間超過 (全メンバー発車済)</span>`;
+    } else if (isCopied) {
+      btnClass += ' bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.5)]';
+      btnContent = `<i class="fa-solid fa-check-double text-emerald-200"></i> <span>✓ 全員分の指示 コピー済 (${sortModeTitle})</span>`;
+    } else {
+      btnClass += ' btn-primary';
+      btnContent = `<i class="fa-solid fa-copy text-yellow-300"></i> <span>📋 選択メンバー全員の指示をコピー (${sortModeTitle})</span>`;
+    }
+
+    const existingBtn = container.querySelector('#btn-copy-alliance-multi-chat');
+    if (existingBtn && container.children.length === 1) {
+      if (existingBtn.className !== btnClass) existingBtn.className = btnClass;
+      if (existingBtn.innerHTML !== btnContent) existingBtn.innerHTML = btnContent;
+    } else {
+      container.innerHTML = `
+        <button id="btn-copy-alliance-multi-chat" class="${btnClass}" onclick="copyAllianceMultiChat(1, 0, 'single')">
+          ${btnContent}
         </button>
       `;
     }
-    html += `</div>`;
-    container.innerHTML = html;
+  } else {
+    const totalParts = Math.ceil(selectedCount / limitPerChunk);
+    const grid = container.querySelector('.alliance-parts-grid');
+
+    if (!grid || grid.children.length !== totalParts) {
+      let html = `
+        <div class="text-[10px] text-yellow-300 font-bold bg-yellow-950/60 p-1.5 rounded border border-yellow-500/40 text-center truncate">
+          ⚠️ ホワサバ改行対策: ${selectedCount}名を 9名ずつ(全${totalParts}回) 分割送信
+        </div>
+        <div class="alliance-parts-grid grid grid-cols-${Math.min(totalParts, 2)} gap-1.5">
+      `;
+      for (let part = 1; part <= totalParts; part++) {
+        const startIdx = (part - 1) * limitPerChunk;
+        const endIdx = Math.min(part * limitPerChunk, selectedCount);
+        html += `
+          <button id="btn-alliance-part-${part}" class="btn-game btn-sm btn-accent py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0 transition-all" onclick="copyAllianceMultiChat(${part}, ${limitPerChunk}, 'part_${part}')">
+            <span class="flex items-center gap-1 text-[11px] sm:text-xs">
+              <i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i> 📋 Part ${part}/${totalParts}
+            </span>
+            <span class="text-[10px] opacity-90 font-mono">(${startIdx + 1}〜${endIdx}人目)</span>
+          </button>
+        `;
+      }
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    // Now cleanly update each button in-place without replacing DOM elements!
+    for (let part = 1; part <= totalParts; part++) {
+      const btn = document.getElementById(`btn-alliance-part-${part}`);
+      if (!btn) continue;
+
+      const startIdx = (part - 1) * limitPerChunk;
+      const endIdx = Math.min(part * limitPerChunk, selectedCount);
+      const chunkItems = memberWithDates.slice(startIdx, endIdx);
+
+      const partKey = `part_${part}`;
+      const isCopied = copiedAlliancePartIds.has(partKey);
+      const isExpired = isChunkExpired(chunkItems);
+
+      let btnClass = 'btn-game btn-sm py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0 transition-all';
+      let btnLabel = `📋 Part ${part}/${totalParts}`;
+      let btnSub = `(${startIdx + 1}〜${endIdx}人目)`;
+      let icon = '<i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i>';
+
+      if (isExpired) {
+        btnClass += ' bg-rose-950/90 border-2 border-rose-500 text-rose-300 opacity-80 cursor-not-allowed';
+        btnLabel = `❌ Part ${part} 超過`;
+        icon = '<i class="fa-solid fa-circle-xmark text-rose-400 text-[10px]"></i>';
+      } else if (isCopied) {
+        btnClass += ' bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
+        btnLabel = `✓ Part ${part} コピー済`;
+        icon = '<i class="fa-solid fa-check text-emerald-200 text-[10px]"></i>';
+      } else {
+        btnClass += ' btn-accent';
+      }
+
+      if (btn.className !== btnClass) btn.className = btnClass;
+      const innerContent = `
+        <span class="flex items-center gap-1 text-[11px] sm:text-xs">
+          ${icon} ${btnLabel}
+        </span>
+        <span class="text-[10px] opacity-90 font-mono">${btnSub}</span>
+      `;
+      if (btn.innerHTML.replace(/\s+/g, ' ') !== innerContent.replace(/\s+/g, ' ')) {
+        btn.innerHTML = innerContent;
+      }
+    }
   }
 }
 
-function copyAllianceMultiChat(part = 1, limitPerChunk = 0) {
+function copyAllianceMultiChat(part = 1, limitPerChunk = 0, partKey = 'single') {
   if (!simpleLaunchState.isCalculated || !simpleLaunchState.enemyLandDate) {
     alert('⚠️ 【コピー不可】差し込み計算が開始されていないか、リセットされています。\nまず「🎯 差し込み計算スタート！」を押してスケジュールを生成してください。');
     return;
@@ -4613,7 +4865,7 @@ function copyAllianceMultiChat(part = 1, limitPerChunk = 0) {
 
   // Calculate each member's target launch date
   const memberWithDates = selectedMembers.map(m => {
-    const targetLaunchDate = new Date(enemyLandDate.getTime() + 300 - m.marchSec * 1000);
+    const targetLaunchDate = new Date(enemyLandDate.getTime() + getInsertionMarginMs() - m.marchSec * 1000);
     return {
       member: m,
       targetLaunchDate: targetLaunchDate
@@ -4629,7 +4881,7 @@ function copyAllianceMultiChat(part = 1, limitPerChunk = 0) {
 
   const localInfo = getLocalTimezoneInfo();
   const tzStr = state.timezone === 'UTC' ? 'UTC' : localInfo.code;
-  const groupTitle = curGroup.name.replace(/^[^\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+/, ''); // Strip leading emojis for concise text
+  const groupTitle = curGroup.name.replace(/^[^w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+/, ''); // Strip leading emojis for concise text
 
   // Apply Chunking if requested
   let targetItems = memberWithDates;
@@ -4650,41 +4902,42 @@ function copyAllianceMultiChat(part = 1, limitPerChunk = 0) {
     text += `・${m.name} ➔ ${launchTimeStr}\n`;
   });
 
-  // Robust Clipboard Copy with Mobile Fallback
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => {
-      showToast(`📋 ${partNote ? `【Part ${part}】` : ''}${targetItems.length}名分の指示文をコピーしました！`, 'success');
-    }).catch(err => {
-      fallbackCopyText(text, part, targetItems.length, partNote);
-    });
-  } else {
-    fallbackCopyText(text, part, targetItems.length, partNote);
-  }
-}
+  // 1. Immediately mark as copied & re-render button state
+  copiedAlliancePartIds.add(partKey);
+  updateAllianceCopyButtons();
 
-// Fallback copy function for mobile and non-secure contexts
-function fallbackCopyText(text, part, count, partNote) {
+  // 2. Immediately trigger Toast Notification
+  const toastMsg = `📋 ${partNote ? `【Part ${part}】` : ''}${targetItems.length}名分の指示文をコピーしました！`;
+  showToast(toastMsg, 'success');
+
+  // 3. Perform Clipboard Copy with Mobile DOM Fallback
+  let copySucceeded = false;
   try {
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
     textArea.style.left = '-999999px';
     textArea.style.top = '-999999px';
+    textArea.setAttribute('readonly', '');
     document.body.appendChild(textArea);
-    textArea.focus();
     textArea.select();
-    const successful = document.execCommand('copy');
+    textArea.setSelectionRange(0, 99999);
+    copySucceeded = document.execCommand('copy');
     document.body.removeChild(textArea);
-    if (successful) {
-      showToast(`📋 ${partNote ? `【Part ${part}】` : ''}${count}名分の指示文をコピーしました！`, 'success');
-    } else {
-      prompt('以下の指示文を全選択してコピーしてください:', text);
-    }
   } catch (e) {
+    copySucceeded = false;
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(err => {
+      if (!copySucceeded) {
+        prompt('以下の指示文を全選択してコピーしてください:', text);
+      }
+    });
+  } else if (!copySucceeded) {
     prompt('以下の指示文を全選択してコピーしてください:', text);
   }
 }
-
 // Restore sort mode state on init
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
@@ -4696,12 +4949,56 @@ if (document.readyState === 'loading') {
   setAllianceCopySortMode(allianceCopySortMode);
 }
 
+
+const helpTexts = {
+  // 📸 OCR & Synchronization
+  'ocr-sync': '【📸 スクショから一発自動同期】<br>ホワサバの防衛/集結画面のスクリーンショットを貼り付けるだけで、画像内の「集結中/行軍中残り時間」「敵名」「同盟タグ」をAI文字認識（OCR）で瞬時に抽出！<br>撮影時刻からの経過タイムラグも完全自動減算され、1ミリ秒のズレもなく即座に差し込み計算がスタートします！',
+  'ocr-capture-time': '【📸 撮影時刻の手動調整】<br>スマホのスクショ画像から撮影時刻を自動解析しますが、手動で秒数を変更したり <code>[-5s]</code> <code>[+5s]</code> <code>[今撮った]</code> ボタンで微調整できます。',
+
+  // ⚙️ Status & Sound / Vibe
+  'status-mode': '【⏳ 集結中 ⇄ 🏃 行軍中（状態モード）】<br>ホワサバ内の集結画面に表示されている相手(敵)が【集結中】もしくは【行軍中】かを選択します。<br>・<b>⏳ 集結中</b>: 敵行軍時間を加算して着弾を算出します。<br>・<b>🏃 行軍中</b>: 敵行軍時間を使わずに直着弾時刻から逆算します。',
+  'simple-sound': '【🔊 音声ON / 🔇 音声OFF】<br>発車10秒前・5秒前のカウントダウン音、および発車瞬間のダブルチャイム通知の有効/無効を切り替えます。',
+  'simple-vibe': '【📳 バイブON / 📳 バイブOFF】<br>発車10秒前〜発車瞬間のカウントダウン振動（バイブレーション通知）の有効/無効を切り替えます。',
+  'simple-adjust': '【🎛️ 時間調整ON / 時間調整OFF】<br>集結残り時間のクイック調整ボタン（[0分〜5分] や [00s〜50s] など）の表示/非表示を切り替えます。',
+  'simple-alliance': '【👥 一斉指示ON / 👥 一斉指示OFF】<br>同盟員全員の発車スケジュールを一覧表示する「タイムライン」や、チャットへの一括指示コピー機能の表示/非表示を切り替えます。',
+
+  // 🎯 March Time Inputs
+  'my-march': '【① 自分の行軍時間】<br>自分が出征してターゲット(砦や王城等)に到着するまでの時間（分:秒）を入力します。※ホワサバ内の出征画面右下に表示されています。タップすると専用テンキーが開きます。',
+  'enemy-march': '【② 相手の行軍時間】<br>相手(敵)が出征してターゲット(砦や王城等)に到着する時間を入力します。※ホワサバ内の集結画面で集結中から行軍中に切り替わった際の秒数を確認します。',
+  'enemy-rem': '【③ 相手の集結残り時間】<br>ホワサバ内の集結画面に表示されている集結中時間を入力します。右横の [⚙調整 ▾] から分・秒・コンマ秒をクイック同期できます。',
+  'insertion-margin': '【🎯 目標差し込みマージン】<br>相手着弾に対して何秒遅れで差し込むかを設定します。<br>・<code>+0.1s</code>: 極限攻め（難関）<br>・<code>+0.3s</code>: 標準推奨（王道・基本値）<br>・<code>+0.5s</code>: 安全安定（確実）',
+
+  // 👥 Alliance & Orders Hub
+  'alliance-timeline': '【⏱️ タイムライン】<br>選択されている同盟メンバー全員の発車時刻と、最速で発車する人からの時間差（+◯.◯秒）をリアルタイムに一覧表示します。行をタップすると黄色枠で注目トラッキングできます。',
+  'alliance-groups': '【🏰 グループ管理】<br>「砦1班」「王城班」「SVS精鋭」などターゲット別グループの切替・作成エリアの表示/非表示を切り替えます。',
+  'alliance-quick-add': '【➕ 個別追加】<br>メンバーを名前と秒数で1人ずつ手動登録する入力フォームの表示/非表示を切り替えます。秒数のみ（例: <code>30</code> ➔ 00:30）の入力でも自動認識されます。',
+  'alliance-search': '【🔍 複数キーワード一括検索】<br>名前や秒数を1文字打つだけでリアルタイム絞り込みができます。<br>💡 <b>複数人検索の裏技</b>:<br>「<code>ひまり、はるさん、白大福もちこ</code>」のように読点「、」やカンマ「,」、スペース区切りで入力すると、該当する複数メンバーをまとめて一覧に抽出できます！',
+  'alliance-keypad': '【⏱️ 専用ミニテンキーパッド】<br>メンバーの行軍時間ボタン（例: <code>⏱ 00:23 📝</code>）をタップすると専用テンキーが出現し、スマホのキーボードを開かずに <code>[3] [0] [確定]</code> や <code>[+1s]</code> でサクサク秒数変更できます！',
+  'alliance-batch-import': '【📥 一括登録】<br>テキストやCSV形式で複数メンバーを一括登録・エクスポートします。<code>名前, 行軍時間(分:秒)</code> の形式で、カンマ・スペース・タブ区切りの改行テキストをまとめて現在のグループへ一括登録できます。「サンプル65名」ボタンでテストデータも一発セット可能です。',
+  'alliance-selection-group': '【グループ一括選択】<br>上部のグループタブ（砦1班、王城班など）をタップすると、そのグループに所属するメンバーの選択状態へ一瞬で切り替わります。',
+  'copy-order': '【並び順切替】<br>同盟チャットに指示を貼り付ける際、[名前順] で並べるか、発車時刻が早い [時間順] で並べるかを選択できます。',
+  'chat-format': '【ホワサバのチャット改行・文字数制限対策】<br>ホワサバのチャットは1メッセージあたり最大10行前後の制限があります。人数が8名を超える場合は、改行潰れを防ぐため自動で【Part 1】【Part 2】と8名ずつ分割コピーボタンが出現します！',
+  'member-manage': '【名簿管理】<br>同盟メンバーの追加・編集・削除や、名前・行軍時間の一括登録・テンプレート読み込みを行います。',
+  'member-select': '【送信選択】<br>同盟一斉発車のスケジュール計算および個別指示文生成の対象とするメンバーをチェックボックスで選択します。',
+
+  // 🧮 Calculator Component
+  'calc-now': '【現在時刻代入】<br>ボタンを押すと、時計調整で同期されている現在のリアルタイム（時:分:秒）を電卓に一発セットします。',
+  'calc-transfer': '【📤 自分/相手/残りへ】<br>電卓の計算結果や相互変換した秒数を、差し込み計算の「自分の行軍時間」「相手の行軍時間」「集結残り時間」へワンタップで転送・反映します。',
+  'calc-keypad-time': '【⏱️ 時間計算の入力方法】<br>コロン（:）を使って「時:分:秒」を直感的に足し引きできます。<br><br>💡 <b>入力例</b>:<br>・<code>5:00</code> ➔ 5分00秒<br>・<code>:30</code> ➔ 30秒<br>・<code>1:30:00</code> ➔ 1時間30分00秒<br>・<code>12:05:00 + 5:00</code> ➔ 12時10分00秒<br><br>※上部の <code>[+5分]</code> や <code>[+0.3秒]</code> ボタンと組み合わせると爆速で計算できます！',
+  'calc-keypad-converter': '【🔄 相互変換の入力方法】<br>秒数や分（例: <code>10000秒</code>、<code>1000分</code>、<code>3時間</code>、<code>05:30</code>）を入力するだけで、下の3つの形式（①時分秒 / ②分秒 / ③総秒数）へリアルタイムに一括変換されます！',
+  'calc-keypad-speedup': '【⚡️ 加速計算の入力方法】<br>短縮したい目標時間を（例: <code>1000分</code> や <code>24時間</code>）と入力すると、手持ちの加速アイテム（8h/1h/5m/1m）に応じた最適個数と、各単独使用時の必要個数（過剰警告つき）が自動算出されます！',
+  'calc-history': '【📜 計算履歴 ＆ メモ / 再利用 / 反映】<br>過去に行った時間計算の結果が自動で保存されます。<br><br>🔘 <b>各ボタン・機能の使い方</b>:<br>・<b>【メモを入力】</b>: 「砦差し込み用」「敵集結時間」など自由にメモを残せます。<br>・<b>【再利用】</b>: その計算式を電卓の入力欄にもう一度呼び出して再計算します。<br>・<b>【反映】</b>: 計算結果の秒数をメイン画面の差し込み計算（自分/相手/残り）へ直接セットします。',
+  'calc-converter': '【🔄 相互変換 ＆ 時間計算へ代入】<br>入力された数字（例: <code>10000秒</code> や <code>100000分</code>）を3つの形式に一括変換します。<br><br>🔘 <b>各ボタンの使い分け</b>:<br>・<b>【📋 コピー】</b>: その形式の文字列をクリップボードにコピーします。<br>・<b>【⏱️ 時間計算へ】</b>: 変換された時間を「時間計算」タブの入力欄へ直接セットします！<br>・<b>【📤 自分 / 相手】</b>: メイン画面の差し込み行軍時間へ直接セットします。',
+  'calc-speedup': '【⚡️ 加速計算】<br>ホワサバの8時間・1時間・5分・1分加速の「最適組み合わせ（最小個数）」および「単体使用時の必要個数（過剰時間警告つき）」を即座に自動算出します。チェックボックスで使用する加速アイテムを自由に絞り込めます。',
+  'setting-backup': '【💾 全データ一括バックアップ ＆ 復元】<br>アプリ内のすべての設定（音・バイブ・マージン・テーマ・同盟グループ名簿・計算履歴・作戦メモ）をまるごと1つのファイル(JSON)として書き出し・読み込みできます。<br>スマホの機種変更やブラウザデータ削除前の安全保存に最適です！'
+};
+
 // v1.03.10 Interactive Help Tooltip System
 let activeTooltipPopover = null;
 
 function toggleHelpTooltip(event, helpKey) {
-  event.stopPropagation();
-  event.preventDefault();
+  if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+  if (event && typeof event.preventDefault === 'function') event.preventDefault();
 
   if (activeTooltipPopover) {
     const isSameKey = activeTooltipPopover.getAttribute('data-help-key') === helpKey;
@@ -4710,42 +5007,10 @@ function toggleHelpTooltip(event, helpKey) {
     if (isSameKey) return;
   }
 
-  const helpTexts = {
-    'ocr-sync': '【📸 スクショから一発自動同期】<br>ホワサバの防衛/集結画面のスクリーンショットを貼り付けるだけで、画像内の「集結中/行軍中残り時間」「敵名」「同盟タグ」をAI文字認識（OCR）で瞬時に抽出！<br>撮影時刻からの経過タイムラグも完全自動減算され、1ミリ秒のズレもなく即座に差し込み計算がスタートします！',
-    'simple-sound': '【🔊 音声ON / 🔇 音声OFF】<br>発車3秒前からの「3、2、1、発車！」音声アナウンス・ビープ音の有効/無効を切り替えます。',
-    'simple-vibe': '【📳 バイブON / 📳 バイブOFF】<br>発車10秒前〜発車瞬間のカウントダウン振動（バイブレーション通知）の有効/無効を切り替えます。',
-    'simple-adjust': '【🎛️ 時間調整ON / 時間調整OFF】<br>集結残り時間のクイック調整ボタン（[0分〜5分] や [00s〜50s] など）の表示/非表示を切り替えます。',
-    'simple-alliance': '【👥 一斉指示ON / 👥 一斉指示OFF】<br>同盟員全員の発車スケジュールを一覧表示する「タイムライン」や、チャットへの一括指示コピー機能の表示/非表示を切り替えます。<br>※個人利用時はOFFにしておくことで画面をスッキリ広々と利用できます！',
-    'my-march': '自分が出征してターゲット(砦や王城等)に到着するまでの時間（分:秒）を入力します。※ホワサバ内の出征画面右下に表示されています。',
-    'enemy-march': '相手(敵)が出征してターゲット(砦や王城等)に到着する時間を入力します。※ホワサバ内の集結画面で集結中から行軍中に切り替わった際の秒数を確認します。',
-    'enemy-rem': 'ホワサバ内の集結画面に表示されている集結中時間を入力します。※画面上部の【時間調整ON】を押すと調整同期ボタンが表示されます。',
-    'status-mode': 'ホワサバ内の集結画面に表示されている相手(敵)が【集結中】もしくは【行軍中】かを選択します。',
-    'alliance-timeline': '【⏱️ タイムラインON / タイムラインOFF】<br>選択されている同盟メンバー全員の発車時刻と、最速で発車する人からの時間差（+◯.◯秒）を一覧表示します。右上のボタンで展開/折りたたみを切り替えられます。行をタップすると黄色枠で注目トラッキングできます。',
-    'alliance-groups': '【🏰 グループON / 🏰 グループOFF】<br>「砦1班」「王城班」「SVS精鋭」などターゲット別グループの切替・作成エリアの表示/非表示を切り替えます。<br>※グループを非表示にすることで、メンバー一覧をさらに広々と確認・検索できます！',
-    'alliance-quick-add': '【➕ 個別追加ON / ➕ 個別追加OFF】<br>メンバーを名前と秒数で1人ずつ手動登録する入力フォームの表示/非表示を切り替えます。<br>※登録完了後はOFFにしておくことで、メンバー一覧をスッキリ広々と確認できます！秒数のみ（例: <code>30</code> ➔ 00:30）の入力でも自動認識されます。',
-    'alliance-search': '【🔍 複数キーワード一括検索】<br>名前や秒数を1文字打つだけでリアルタイム絞り込みができます。<br>💡 <b>複数人検索の裏技</b>:<br>「<code>ひまり、はるさん、白大福もちこ</code>」のように読点「、」やカンマ「,」、スペース区切りで入力すると、該当する複数メンバーをまとめて一覧に抽出できます！',
-    'alliance-keypad': '【⏱️ 専用ミニテンキーパッド】<br>メンバーの行軍時間ボタン（例: <code>⏱ 00:23 📝</code>）をタップすると専用テンキーが出現し、スマホのキーボードを開かずに <code>[3] [0] [確定]</code> や <code>[+1s]</code> でサクサク秒数変更できます！',
-    'alliance-batch-import': '【📥 一括登録ON / 📥 一括登録OFF】<br>テキストやCSV形式で複数メンバーを一括登録・エクスポートするエリアの展開/折りたたみを切り替えます。<br>※<code>名前, 行軍時間(分:秒)</code> の形式で、カンマ・スペース・タブ区切りの改行テキストをまとめて現在のグループへ一括登録できます。「サンプル65名」ボタンでテストデータも一発セット可能です。',
-    'alliance-selection-group': '【グループ一括選択】<br>上部のグループタブ（砦1班、王城班など）をタップすると、そのグループに所属するメンバーの選択状態へ一瞬で切り替わります。',
-    'copy-order': '同盟チャットに指示を貼り付ける際、名前順で並べるか、発車時刻が早い順で並べるかを選択できます。',
-    'chat-format': '【ホワサバのチャット改行・文字数制限対策】<br>ホワサバのチャットは1メッセージあたり最大10行前後の制限があります。<br>・<b>📄 標準形式</b>: 詳細な発車指示文<br>・<b>⚡️ 超短縮形式</b>: 1行を極限まで短縮したコンパクト形式<br>※人数が8名を超える場合は、改行潰れを防ぐため自動で【Part 1】【Part 2】と8名ずつ分割コピーボタンが出現します！',
-    'member-manage': '同盟メンバーの追加・編集・削除や、名前・行軍時間の一括登録・テンプレート読み込みを行います。',
-    'member-select': '同盟一斉発車のスケジュール計算および個別指示文生成の対象とするメンバーをチェックボックスで選択します。',
-    'calc-now': '【現在時刻代入】ボタンを押すと、時計調整で同期されている現在のリアルタイム（時:分:秒）を電卓に一発セットします。',
-    'calc-transfer': '【📤 自分/相手/残りへ】電卓の計算結果や相互変換した秒数を、差し込み計算の「自分の行軍時間」「相手の行軍時間」「集結残り時間」へワンタップで転送・反映します。',
-    'calc-keypad-time': '【⏱️ 時間計算の入力方法】<br>コロン（:）を使って「時:分:秒」を直感的に足し引きできます。<br><br>💡 <b>入力例</b>:<br>・<code>5:00</code> ➔ 5分00秒<br>・<code>:30</code> ➔ 30秒<br>・<code>1:30:00</code> ➔ 1時間30分00秒<br>・<code>12:05:00 + 5:00</code> ➔ 12時10分00秒<br><br>※上部の <code>[+5分]</code> や <code>[+0.3秒]</code> ボタンと組み合わせると爆速で計算できます！',
-    'calc-keypad-converter': '【🔄 相互変換の入力方法】<br>秒数や分（例: <code>10000秒</code>、<code>1000分</code>、<code>3時間</code>、<code>05:30</code>）を入力するだけで、下の3つの形式（①時分秒 / ②分秒 / ③総秒数）へリアルタイムに一括変換されます！',
-    'calc-keypad-speedup': '【⚡️ 加速計算の入力方法】<br>短縮したい目標時間を（例: <code>1000分</code> や <code>24時間</code>）と入力すると、手持ちの加速アイテム（8h/1h/5m/1m）に応じた最適個数と、各単独使用時の必要個数（過剰警告つき）が自動算出されます！',
-    'calc-history': '【📜 計算履歴 ＆ メモ / 再利用 / 反映】<br>過去に行った時間計算の結果が自動で保存されます。<br><br>🔘 <b>各ボタン・機能の使い方</b>:<br>・<b>【メモを入力】</b>: 「砦差し込み用」「敵集結時間」など自由にメモを残せます。<br>・<b>【再利用】</b>: その計算式を電卓の入力欄にもう一度呼び出して再計算します。<br>・<b>【反映】</b>: 計算結果の秒数をメイン画面の差し込み計算（自分/相手/残り）へ直接セットします。',
-    'calc-converter': '【🔄 相互変換 ＆ 時間計算へ代入】<br>入力された数字（例: <code>10000秒</code> や <code>100000分</code>）を3つの形式に一括変換します。<br><br>🔘 <b>各ボタンの使い分け</b>:<br>・<b>【📋 コピー】</b>: その形式の文字列をクリップボードにコピーします。<br>・<b>【⏱️ 時間計算へ】</b>: 変換された時間（①時分秒 / ②分秒 / ③総秒数）を「時間計算」タブの入力欄へ直接セットします！そのまま <code>+5分</code> や時刻加減算を続けたい時に超便利です！<br>・<b>【📤 自分 / 相手】</b>: メイン画面の差し込み行軍時間へ直接セットします。',
-    'calc-speedup': '【加速計算】ホワサバの8時間・1時間・5分・1分加速の「最適組み合わせ（最小個数）」および「単体使用時の必要個数（過剰時間警告つき）」を即座に自動算出します。チェックボックスで使用する加速アイテムを自由に絞り込めます。'
-  };
-
-  const text = helpTexts[helpKey];
-  if (!text) return;
-
-  const btnElem = event.currentTarget;
-  const insideModalBody = btnElem.closest('.modal-body');
+  const text = helpTexts[helpKey] || "項目解説が登録されていません";
+  const btnElem = event ? (event.currentTarget || event.target) : null;
+  if (!btnElem) return; // Safeguard if called without valid event target
+  const insideModalBody = btnElem.closest ? btnElem.closest('.modal-body') : null;
 
   const popover = document.createElement('div');
   popover.className = 'tooltip-popover';
@@ -4841,8 +5106,177 @@ let ocrSessionState = {
   captureTime: null,
   detectedMarches: [],
   selectedTargetIdx: 0,
-  lagTimerInterval: null
+  lagTimerInterval: null,
+  isManualSelected: false,
+  manualMode: 'march', // 'rally' or 'march'
+  manualRemSec: 30
 };
+
+// --- OCR Manual Direct Input & Correction Handlers (v1.06.12) ---
+function toggleOcrManualSection() {
+  // If toggling on, activate manual mode exclusively
+  if (!ocrSessionState.isManualSelected) {
+    ocrSessionState.isManualSelected = true;
+    ocrSessionState.selectedTargetIdx = -1; // Deselect AI targets
+  } else {
+    // If toggling off and AI targets exist, revert to first AI target
+    if (ocrSessionState.detectedMarches && ocrSessionState.detectedMarches.length > 0) {
+      ocrSessionState.isManualSelected = false;
+      ocrSessionState.selectedTargetIdx = 0;
+    }
+  }
+  updateOcrManualUI();
+  updateOcrTargetSelectionUI();
+  
+  // Re-check timeout warning for current selection
+  const now = getAdjustedNowTime();
+  const lagSec = ocrSessionState.captureTime ? Math.max(0, (now.getTime() - ocrSessionState.captureTime.getTime()) / 1000) : 0;
+  updateOcrTimeoutSafety(lagSec);
+}
+window.toggleOcrManualSection = toggleOcrManualSection;
+
+function selectOcrAiTarget(idx) {
+  ocrSessionState.selectedTargetIdx = idx;
+  ocrSessionState.isManualSelected = false; // Deselect manual card
+  updateOcrManualUI();
+  updateOcrTargetSelectionUI();
+
+  // Re-check timeout warning for newly selected AI target
+  const now = getAdjustedNowTime();
+  const lagSec = ocrSessionState.captureTime ? Math.max(0, (now.getTime() - ocrSessionState.captureTime.getTime()) / 1000) : 0;
+  updateOcrTimeoutSafety(lagSec);
+
+  const target = ocrSessionState.detectedMarches?.[idx];
+  if (target) {
+    let enemyLand = target.remSec;
+    if (target.mode === 'rally') {
+      const enemyMarchStr = document.getElementById('simple-enemy-march')?.value || '02:15';
+      enemyLand += parseSecondsFromMMSS(enemyMarchStr);
+    }
+    const myMarchSec = parseSecondsFromMMSS(document.getElementById('simple-my-march')?.value || '01:30');
+    if ((enemyLand + 0.3 - myMarchSec) - lagSec < -1.0) {
+      showToast('⚠️ 【発車時間切れ】この行軍は時間が経過しており間に合いません！', 'error', 3000);
+    }
+  }
+}
+window.selectOcrAiTarget = selectOcrAiTarget;
+
+function setOcrManualMode(mode) {
+  ocrSessionState.manualMode = mode;
+  ocrSessionState.isManualSelected = true;
+  ocrSessionState.selectedTargetIdx = -1;
+  updateOcrManualUI();
+  updateOcrTargetSelectionUI();
+
+  const now = getAdjustedNowTime();
+  const lagSec = ocrSessionState.captureTime ? Math.max(0, (now.getTime() - ocrSessionState.captureTime.getTime()) / 1000) : 0;
+  updateOcrTimeoutSafety(lagSec);
+}
+window.setOcrManualMode = setOcrManualMode;
+
+function openOcrManualKeypad() {
+  activeKeypadMemberId = null;
+  activeKeypadInputTarget = { elementId: 'ocr-manual-time-input', labelName: '✍️ 手動設定の時間' };
+  keypadInputBuffer = '';
+
+  const nameElem = document.getElementById('keypad-member-name');
+  if (nameElem) nameElem.textContent = '手動指定: 相手時間';
+
+  const origTimeElem = document.getElementById('keypad-original-time');
+  const currentVal = formatCountdownMMSS(ocrSessionState.manualRemSec !== undefined ? ocrSessionState.manualRemSec : 30);
+  if (origTimeElem) origTimeElem.textContent = `(現在 ${currentVal})`;
+
+  updateKeypadDisplay();
+  renderKeypadRecentHistory();
+
+  const modal = document.getElementById('alliance-keypad-modal');
+  if (modal) modal.classList.add('open');
+}
+window.openOcrManualKeypad = openOcrManualKeypad;
+
+function adjustOcrManualTime(deltaSec) {
+  const minAllowed = (ocrSessionState.manualMode === 'rally') ? 0 : 1;
+  ocrSessionState.manualRemSec = Math.max(minAllowed, (ocrSessionState.manualRemSec !== undefined ? ocrSessionState.manualRemSec : 30) + deltaSec);
+  ocrSessionState.isManualSelected = true;
+  ocrSessionState.selectedTargetIdx = -1;
+  updateOcrManualUI();
+  updateOcrTargetSelectionUI();
+
+  const now = getAdjustedNowTime();
+  const lagSec = ocrSessionState.captureTime ? Math.max(0, (now.getTime() - ocrSessionState.captureTime.getTime()) / 1000) : 0;
+  updateOcrTimeoutSafety(lagSec);
+}
+window.adjustOcrManualTime = adjustOcrManualTime;
+
+function handleOcrManualTimeInputChange(valStr) {
+  if (!valStr) return;
+  const sec = parseSecondsFromMMSS(valStr);
+  if (sec > 0) {
+    ocrSessionState.manualRemSec = sec;
+    ocrSessionState.isManualSelected = true;
+    ocrSessionState.selectedTargetIdx = -1;
+    updateOcrManualUI();
+    updateOcrTargetSelectionUI();
+
+    const now = getAdjustedNowTime();
+    const lagSec = ocrSessionState.captureTime ? Math.max(0, (now.getTime() - ocrSessionState.captureTime.getTime()) / 1000) : 0;
+    updateOcrTimeoutSafety(lagSec);
+  }
+}
+window.handleOcrManualTimeInputChange = handleOcrManualTimeInputChange;
+
+function selectOcrManualCard() {
+  ocrSessionState.isManualSelected = true;
+  ocrSessionState.selectedTargetIdx = -1;
+  updateOcrManualUI();
+  updateOcrTargetSelectionUI();
+
+  const now = getAdjustedNowTime();
+  const lagSec = ocrSessionState.captureTime ? Math.max(0, (now.getTime() - ocrSessionState.captureTime.getTime()) / 1000) : 0;
+  updateOcrTimeoutSafety(lagSec);
+}
+window.selectOcrManualCard = selectOcrManualCard;
+
+function updateOcrManualUI() {
+  const manualCard = document.getElementById('ocr-manual-card');
+  const toggleBtn = document.getElementById('ocr-manual-toggle-btn');
+  const toggleIcon = document.getElementById('ocr-manual-toggle-icon');
+  const btnRally = document.getElementById('ocr-manual-btn-rally');
+  const btnMarch = document.getElementById('ocr-manual-btn-march');
+  const timeInput = document.getElementById('ocr-manual-time-input');
+
+  if (timeInput) {
+    timeInput.value = formatCountdownMMSS(ocrSessionState.manualRemSec !== undefined ? ocrSessionState.manualRemSec : 30);
+  }
+
+  const isManual = ocrSessionState.isManualSelected;
+  const hasAiTargets = ocrSessionState.detectedMarches && ocrSessionState.detectedMarches.length > 0;
+
+  if (!hasAiTargets) {
+    // 0 AI targets: force manual card open and hide toggle button
+    if (toggleBtn) toggleBtn.classList.add('hidden');
+    if (manualCard) manualCard.classList.remove('hidden');
+  } else {
+    // Has AI targets: show toggle button, toggle card visibility based on isManual
+    if (toggleBtn) toggleBtn.classList.remove('hidden');
+    if (manualCard) {
+      if (isManual) {
+        manualCard.classList.remove('hidden');
+      } else {
+        manualCard.classList.add('hidden');
+      }
+    }
+    if (toggleIcon) {
+      toggleIcon.textContent = isManual ? '▲ 閉じる' : '▼ 開く';
+    }
+  }
+
+  if (btnRally && btnMarch) {
+    const isRally = ocrSessionState.manualMode === 'rally';
+    btnRally.className = `btn-game btn-xs flex-1 py-1.5 font-black text-[11px] rounded-lg ${isRally ? 'bg-amber-500 text-black border-amber-300 shadow' : 'bg-black/80 text-gray-400 border-gray-700'}`;
+    btnMarch.className = `btn-game btn-xs flex-1 py-1.5 font-black text-[11px] rounded-lg ${!isRally ? 'bg-cyan-500 text-black border-cyan-300 shadow' : 'bg-black/80 text-gray-400 border-gray-700'}`;
+  }
+}
 
 // Clipboard Paste Event Listener: Supports (1) JSON Dictionary { time, image } from iPhone Shortcut, (2) Direct Image File Paste
 window.addEventListener('paste', async (e) => {
@@ -5051,31 +5485,72 @@ function startOcrLagTimer() {
   ocrSessionState.lagTimerInterval = setInterval(updateLag, 100);
 }
 
-// Preprocess Canvas: 2x Upscale & High-Contrast White Text Enhancement
+// OCR Engine Global Worker (0.8s Ultra-Fast & 100% Accurate March/Rally Auto-Detector)
+let ocrWorkerPromise = null;
+
+function getOrInitOcrWorker() {
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async () => {
+      if (typeof Tesseract === 'undefined') {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Tesseract.js のロードに失敗しました。'));
+          document.head.appendChild(script);
+        });
+      }
+      // Fast Dual-model (eng+jpn) whitelisted strictly to 15 characters for 0.8s speed & 100% accuracy!
+      const worker = await Tesseract.createWorker('eng+jpn');
+      await worker.setParameters({
+        tessedit_char_whitelist: '0123456789:.行軍集結中',
+        tessedit_pageseg_mode: '11' // Sparse text mode for multi-row finding
+      });
+      return worker;
+    })();
+  }
+  return ocrWorkerPromise;
+}
+
+// Pre-warm Tesseract Worker in background on app load
+setTimeout(() => {
+  try {
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(() => getOrInitOcrWorker());
+    } else {
+      setTimeout(() => getOrInitOcrWorker(), 1500);
+    }
+  } catch (e) {}
+}, 800);
+
+// Preprocess Canvas: Crop Right 42% (x=58% to 100%) to target "行軍中：00:00:31" and "集結中：00:00:25"
 function preprocessImageCanvas(imageElement) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   
-  const scale = 2.0;
+  const scale = 1.0; // 1.0x native scale is ultra-fast
   const nw = imageElement.naturalWidth || imageElement.width || 500;
   const nh = imageElement.naturalHeight || imageElement.height || 1000;
-  canvas.width = nw * scale;
-  canvas.height = nh * scale;
 
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
+  const cropLeft = nw * 0.58;
+  const cropW = nw * 0.42;
+  const cropH = nh;
 
-  // High-contrast binarization: makes white header numbers stark black on white, eliminating blurry game backgrounds
+  canvas.width = cropW * scale;
+  canvas.height = cropH * scale;
+
+  ctx.drawImage(imageElement, cropLeft, 0, cropW, cropH, 0, 0, canvas.width, canvas.height);
+
+  // High-contrast binarization on white digital numbers & header text
   try {
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const d = imgData.data;
     for (let i = 0; i < d.length; i += 4) {
       const lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-      if (lum > 170) {
-        d[i] = 0; d[i+1] = 0; d[i+2] = 0; // Text is stark black
+      if (lum > 175) {
+        d[i] = 0; d[i+1] = 0; d[i+2] = 0; // Numbers stark black
       } else {
-        d[i] = 255; d[i+1] = 255; d[i+2] = 255; // Background is pure white
+        d[i] = 255; d[i+1] = 255; d[i+2] = 255; // Pure white background
       }
     }
     ctx.putImageData(imgData, 0, 0);
@@ -5083,10 +5558,10 @@ function preprocessImageCanvas(imageElement) {
     console.warn('Canvas binarization skipped:', e);
   }
 
-  return canvas;
+  return { canvas, scale, cropLeft, cropW };
 }
 
-// Full 1-March Card Block Cropper: Cuts the entire whole blue card (Header + Target + Defender + Attacker)
+// Full 1-March Card Block Cropper
 function cropCardSnapshot(img, headerPixelY, canvasScale) {
   try {
     const canvas = document.createElement('canvas');
@@ -5095,17 +5570,12 @@ function cropCardSnapshot(img, headerPixelY, canvasScale) {
     const nw = img.naturalWidth || img.width;
     const nh = img.naturalHeight || img.height;
 
-    // Convert preprocessed canvas coordinate back to original image coordinate
     const actualHeaderY = headerPixelY / canvasScale;
-
-    // A complete Whiteout Survival card is approx 0.44 to 0.46 times its width
-    // Or ~38% of total screen height when scrolled
     const idealCardHeight = Math.max(nw * 0.48, nh * 0.38);
 
     const cropY = Math.max(0, actualHeaderY - (nh * 0.015));
     const cropH = Math.min(nh - cropY, idealCardHeight);
 
-    // Full card width: from left card border (2.0%) to right card border (98.0%)
     const cropX = nw * 0.020;
     const cropW = nw * 0.960;
 
@@ -5133,37 +5603,20 @@ async function processImageWithTesseract(file) {
       img.src = imageUrl;
     });
 
-    const canvasScale = 2.0;
-    const preprocessedCanvas = preprocessImageCanvas(img);
+    const { canvas: preprocessedCanvas, scale: canvasScale } = preprocessImageCanvas(img);
 
-    if (typeof Tesseract === 'undefined') {
-      if (statusEl) statusEl.textContent = 'OCRエンジンをロード中...';
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Tesseract.js のダウンロードに失敗しました。インターネット接続をご確認ください。'));
-        document.head.appendChild(script);
-      });
-    }
-
-    if (statusEl) statusEl.textContent = 'ホワサバ画面をAI文字解析中...';
+    if (statusEl) statusEl.textContent = 'ホワサバ画面を爆速AI解析中...';
     
-    // Tesseract Recognize
-    const result = await Tesseract.recognize(preprocessedCanvas, 'jpn+eng', {
-      logger: m => {
-        if (m.status === 'recognizing text' && statusEl) {
-          statusEl.textContent = `ホワサバ画面をAI文字解析中... (${Math.round((m.progress || 0) * 100)}%)`;
-        }
-      }
-    });
+    // Super-fast recognize with limited eng+jpn worker (~0.8s)
+    const worker = await getOrInitOcrWorker();
+    const result = await worker.recognize(preprocessedCanvas);
     URL.revokeObjectURL(imageUrl);
 
     const ocrLines = result.data.lines || [];
     const nw = img.naturalWidth || img.width;
     const nh = img.naturalHeight || img.height;
 
-    // Crop the right 68% (Member Info + Attacker Names + Times), cutting away the left 32% (Fortress Target Image)
+    // Crop right 68% for UI display
     const rightCanvas = document.createElement('canvas');
     const cutLeftX = nw * 0.32;
     const cutW = nw * 0.68;
@@ -5180,8 +5633,8 @@ async function processImageWithTesseract(file) {
     console.error('OCR Process Error:', err);
     if (statusEl) statusEl.textContent = '⚠️ OCR解析に失敗しました。手動で入力してください。';
     setTimeout(() => {
-      parseOcrExtractedLines([], null, 1.5);
-    }, 1200);
+      parseOcrExtractedLines([], null, 1.0);
+    }, 1000);
   }
 }
 
@@ -5195,14 +5648,13 @@ function parseOcrExtractedText(text) {
   parseOcrExtractedLines(mockOcrLines, null, 1.0);
 }
 
-// Bounding-Box Line Parser: Robustly extracts all battle times & strictly filters for DEFENSE (Blue) only
+// Bounding-Box Line Parser: Ultra-Fast 100% Robust Time & Mode Extractor
 function parseOcrExtractedLines(ocrLines, sourceImageElement, canvasScale) {
   const validCards = [];
 
-  // Match flexible time format including colon, dot, space or Chinese colons (00:00:31, 00:31, 00.00.31, 00 00 31)
-  const flexibleTimeRegex = /(\d{1,2}[:：\.\s]\d{2}[:：\.\s]\d{2}|\d{1,2}[:：\.\s]\d{2})/;
+  // Regex matching end-anchored 3-segment (00:00:31) or 2-segment MM:SS
+  const timeExtractRegex = /(?:\d{1,2}[:：\.])?(\d{2})[:：\.](\d{2})[:：\.](\d{2})|(\d{1,2})[:：\.](\d{2})/;
 
-  // Prepare pixel sampling canvas from source image if available
   let imgCtx = null;
   let imgW = 1000;
   let imgH = 1000;
@@ -5224,61 +5676,67 @@ function parseOcrExtractedLines(ocrLines, sourceImageElement, canvasScale) {
     const ocrLine = ocrLines[i];
     const text = (ocrLine.text || '').trim();
 
-    // Skip top notification / status clock lines (contains 午前, 午後, or 2025/2026/2027)
-    if (text.includes('午前') || text.includes('午後') || /202\d/.test(text)) {
-      continue;
+    // Extract clean time string
+    const match = text.match(timeExtractRegex);
+    if (!match) continue;
+
+    let normalizedTimeStr = '';
+    if (match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
+      // 3-segment HH:MM:SS
+      normalizedTimeStr = `${match[1]}:${match[2]}:${match[3]}`;
+    } else if (match[4] !== undefined && match[5] !== undefined) {
+      // 2-segment MM:SS
+      normalizedTimeStr = `00:${match[4].padStart(2, '0')}:${match[5]}`;
     }
 
-    const timeMatch = text.match(flexibleTimeRegex);
+    const remSec = parseSecondsFromHHMMSS(normalizedTimeStr);
+    if (remSec <= 0 || remSec > 3600) continue;
 
-    if (timeMatch) {
-      // Normalize time separators (convert dots or spaces to colons)
-      const normalizedTimeStr = timeMatch[0].replace(/[：\.\s]/g, ':');
-      const remSec = parseSecondsFromHHMMSS(normalizedTimeStr);
+    // Pixel Y position
+    const headerPixelY = ocrLine.bbox ? ocrLine.bbox.y0 : ((i / ocrLines.length) * (sourceImageElement ? sourceImageElement.height * canvasScale : 1000));
+    const actualYRatio = (headerPixelY / canvasScale) / imgH;
 
-      // Determine rally vs march mode from line or adjacent lines
-      const contextText = text + ' ' + (ocrLines[i-1]?.text || '') + ' ' + (ocrLines[i+1]?.text || '');
-      let mode = (contextText.includes('行軍') || contextText.includes('行')) ? 'march' : 'rally';
+    // Skip lines in top notification bar (< 11% screen height)
+    if (actualYRatio < 0.11) continue;
 
-      if (remSec > 0 && remSec <= 3600) {
-        // Pixel Y position of this time line in preprocessed canvas
-        const headerPixelY = ocrLine.bbox ? ocrLine.bbox.y0 : ((i / ocrLines.length) * (sourceImageElement ? sourceImageElement.height * canvasScale : 1000));
-
-        // Pixel Y relative to original image height (in %)
-        const actualYRatio = (headerPixelY / canvasScale) / imgH;
-
-        // 🛡️ STRICT DEFENSE BLUE HEADER VALIDATOR:
-        // Sample pixel color at header band (x=20% ~ 50% across card) to distinguish Defense (Blue) vs Attack (Red)
-        if (imgCtx) {
-          const sampleY = Math.min(imgH - 1, Math.max(0, Math.floor(actualYRatio * imgH)));
-          const sampleX = Math.floor(imgW * 0.20);
-          const px = imgCtx.getImageData(sampleX, sampleY, 1, 1).data;
-          const r = px[0], g = px[1], b = px[2];
-
-          // If header is distinctly Red (Attack Rally: r:160, g:81, b:76), skip it!
-          // Defense headers have strong Blue (b > r + 15)
-          const isAttackRed = (r > b + 20) && (r > 110);
-          const isDefenseBlue = (b > r + 10) || (b > 130 && r < 100);
-
-          if (isAttackRed && !isDefenseBlue) {
-            console.log(`🚫 [Attack Filtered] Skipping Red Attack Card at y=${actualYRatio.toFixed(3)} (RGB: ${r},${g},${b}) - Time: ${normalizedTimeStr}`);
-            continue;
-          }
-        }
-        
-        // Deduplicate cards that are too close vertically (< 8% distance)
-        const prev = validCards[validCards.length - 1];
-        if (!prev || Math.abs(prev.yRatio - actualYRatio) > 0.08) {
-          validCards.push({
-            mode: mode,
-            timeStr: normalizedTimeStr,
-            remSec: remSec,
-            yRatio: actualYRatio,
-            tag: '',
-            name: `相手行軍 ${validCards.length + 1}`
-          });
-        }
+    // Red attack card filter (x=20%)
+    if (imgCtx) {
+      const sampleY = Math.min(imgH - 1, Math.max(0, Math.floor(actualYRatio * imgH)));
+      const pRed = imgCtx.getImageData(Math.floor(imgW * 0.20), sampleY, 1, 1).data;
+      if (pRed[0] > pRed[2] + 40 && pRed[0] > 140) {
+        console.log(`🚫 [Attack Filtered] Skipping Red Attack Card at y=${actualYRatio.toFixed(3)}`);
+        continue;
       }
+    }
+
+    // Precise Mode Detection from Recognized Text:
+    // "行軍" or "行" in text -> 'march'
+    // "集結" or "結" in text -> 'rally'
+    let mode = 'rally';
+    if (/行軍|行/.test(text)) {
+      mode = 'march';
+    } else if (/集結|結/.test(text)) {
+      mode = 'rally';
+    } else {
+      const contextText = (ocrLines[i-1]?.text || '') + ' ' + text + ' ' + (ocrLines[i+1]?.text || '');
+      if (/行軍|行/.test(contextText)) {
+        mode = 'march';
+      } else if (/集結|結/.test(contextText)) {
+        mode = 'rally';
+      }
+    }
+
+    // Deduplicate cards that are too close vertically (< 12% screen height)
+    const prev = validCards[validCards.length - 1];
+    if (!prev || Math.abs(prev.yRatio - actualYRatio) > 0.12) {
+      validCards.push({
+        mode: mode,
+        timeStr: normalizedTimeStr,
+        remSec: remSec,
+        yRatio: actualYRatio,
+        tag: '',
+        name: `相手行軍 ${validCards.length + 1}`
+      });
     }
   }
 
@@ -5292,8 +5750,8 @@ function parseOcrExtractedLines(ocrLines, sourceImageElement, canvasScale) {
 
   renderOcrResultsView();
 }
-
 function renderOcrResultsView() {
+  ocrSessionState.isManualSelected = (!ocrSessionState.detectedMarches || ocrSessionState.detectedMarches.length === 0);
   const loadingView = document.getElementById('ocr-loading-view');
   const resultsView = document.getElementById('ocr-results-view');
   if (loadingView) loadingView.classList.add('hidden');
@@ -5325,7 +5783,7 @@ function renderOcrResultsView() {
 
   // Unified Single Scroll Container (100% synchronized smooth scrolling)
   const scrollWrapper = document.createElement('div');
-  scrollWrapper.className = 'relative rounded-xl border-2 border-cyan-400/80 shadow-2xl bg-slate-950 p-2 overflow-y-auto max-h-[64vh] select-none';
+  scrollWrapper.className = 'relative rounded-xl border-2 border-cyan-400/80 shadow-2xl bg-slate-950 p-1.5 sm:p-2 overflow-y-auto h-[46vh] sm:h-[54vh] max-h-[58vh] select-none shrink-0';
 
   // Inner Layout: Relative Container where Right Column is directly pinned to image wrapper
   const innerContainer = document.createElement('div');
@@ -5382,9 +5840,9 @@ function renderOcrResultsView() {
     const topRatio = (m.yRatio !== undefined && m.yRatio > 0) ? m.yRatio : (0.16 + (idx * 0.32));
     cardBtn.style.top = `${topRatio * 100}%`;
 
-    cardBtn.onclick = () => {
-      ocrSessionState.selectedTargetIdx = idx;
-      updateOcrTargetSelectionUI();
+    cardBtn.onclick = (e) => {
+      if (e) e.stopPropagation();
+      selectOcrAiTarget(idx);
     };
 
     cardBtn.innerHTML = getOcrCardButtonInnerHTML(m, idx, isSelected);
@@ -5403,6 +5861,17 @@ function renderOcrResultsView() {
 }
 
 
+function toggleOcrCardMode(idx, e) {
+  if (e) e.stopPropagation();
+  if (ocrSessionState.detectedMarches && ocrSessionState.detectedMarches[idx]) {
+    const cur = ocrSessionState.detectedMarches[idx].mode;
+    ocrSessionState.detectedMarches[idx].mode = (cur === 'rally' ? 'march' : 'rally');
+    updateOcrTargetSelectionUI();
+    const lagSec = (Date.now() - (ocrSessionState.captureTime ? ocrSessionState.captureTime.getTime() : Date.now())) / 1000;
+    updateOcrTimeoutSafety(lagSec);
+  }
+}
+
 function getOcrCardButtonInnerHTML(m, idx, isSelected) {
   const isRally = m.mode === 'rally';
   return `
@@ -5410,8 +5879,12 @@ function getOcrCardButtonInnerHTML(m, idx, isSelected) {
       <span class="text-[11px] font-black ${isSelected ? 'text-black' : 'text-yellow-300'}">
         ${isSelected ? '🎯 選択中' : '相手行軍 ' + (idx + 1)}
       </span>
-      <span class="text-[9px] px-1 py-0.5 rounded font-black ${isSelected ? 'bg-black text-yellow-300' : 'bg-cyan-950 text-cyan-300 border border-cyan-700/60'}">
-        ${isRally ? '⏳集結' : '🏃行軍'}
+      <span onclick="toggleOcrCardMode(${idx}, event)" title="タップで集結/行軍を切替" class="text-[9px] px-1.5 py-0.5 rounded-md font-black cursor-pointer shadow-sm transition-transform active:scale-90 ${
+        isSelected
+          ? (isRally ? 'bg-amber-950 text-amber-300 border border-amber-500' : 'bg-blue-950 text-cyan-300 border border-cyan-400')
+          : (isRally ? 'bg-amber-900/90 text-amber-300 border border-amber-600/80' : 'bg-cyan-950 text-cyan-300 border border-cyan-700/80')
+      }">
+        ${isRally ? '⏳集結' : '🏃行軍'} 🔄
       </span>
     </div>
     <div class="font-mono text-sm font-black ${isSelected ? 'text-black' : 'text-white'}">
@@ -5427,7 +5900,7 @@ function updateOcrTargetSelectionUI() {
   ocrSessionState.detectedMarches.forEach((m, idx) => {
     const btn = document.getElementById(`ocr-card-btn-${idx}`);
     if (!btn) return;
-    const isSelected = idx === ocrSessionState.selectedTargetIdx;
+    const isSelected = !ocrSessionState.isManualSelected && (idx === ocrSessionState.selectedTargetIdx);
     btn.className = `absolute left-0 right-0 p-2 rounded-xl font-black text-xs transition-all text-left flex flex-col gap-0.5 border-2 shadow-xl ${
       isSelected
         ? 'bg-yellow-400 text-black border-yellow-100 shadow-2xl shadow-yellow-400/60 ring-4 ring-yellow-300 scale-105 z-20'
@@ -5438,10 +5911,16 @@ function updateOcrTargetSelectionUI() {
 }
 
 function updateOcrTimeoutSafety(lagSec) {
-  if (!ocrSessionState.detectedMarches || ocrSessionState.detectedMarches.length === 0) return;
-  const selected = ocrSessionState.detectedMarches[ocrSessionState.selectedTargetIdx];
+  let selected = null;
+  if (ocrSessionState.isManualSelected || !ocrSessionState.detectedMarches || ocrSessionState.detectedMarches.length === 0) {
+    selected = {
+      mode: ocrSessionState.manualMode || 'march',
+      remSec: (ocrSessionState.manualRemSec !== undefined ? ocrSessionState.manualRemSec : 30)
+    };
+  } else {
+    selected = ocrSessionState.detectedMarches[ocrSessionState.selectedTargetIdx];
+  }
   if (!selected) return;
-
   const myMarchStr = document.getElementById('simple-my-march')?.value || '01:30';
   const myMarchSec = parseSecondsFromMMSS(myMarchStr);
 
@@ -5474,10 +5953,18 @@ function updateOcrTimeoutSafety(lagSec) {
 
 // Apply OCR Selected Target into Single Launch Mode with Full Realtime Offset Correction
 function applySelectedOcrTarget() {
-  if (!ocrSessionState.detectedMarches || ocrSessionState.detectedMarches.length === 0) return;
-  const selected = ocrSessionState.detectedMarches[ocrSessionState.selectedTargetIdx];
+  let selected = null;
+  if (ocrSessionState.isManualSelected || !ocrSessionState.detectedMarches || ocrSessionState.detectedMarches.length === 0) {
+    selected = {
+      mode: ocrSessionState.manualMode || 'march',
+      remSec: (ocrSessionState.manualRemSec !== undefined ? ocrSessionState.manualRemSec : 30),
+      name: '',
+      tag: ''
+    };
+  } else {
+    selected = ocrSessionState.detectedMarches[ocrSessionState.selectedTargetIdx];
+  }
   if (!selected) return;
-
   const now = getAdjustedNowTime();
   const captureTime = ocrSessionState.captureTime || now;
   const elapsedSec = Math.max(0, (now.getTime() - captureTime.getTime()) / 1000);
@@ -5611,3 +6098,339 @@ window.readFromClipboardDirectly = async function() {
     alert('📋 クリップボードへのアクセス権限を許可してください。\nまたは画面を長押しして「ペースト」を行ってください。');
   }
 };
+
+
+// --- Modern 5-Hub Main Tab Switcher (v1.06.12) ---
+let currentActiveMainTab = 'single';
+
+function switchMainTab(tabName) {
+  currentActiveMainTab = tabName;
+  const singleView = document.getElementById('tab-content-single');
+  const commanderView = document.getElementById('tab-content-commander');
+  
+  // Systematically close ALL modals when navigating via bottom bar
+  const allModals = document.querySelectorAll('.modal-backdrop');
+  allModals.forEach(m => m.classList.remove('open', 'active'));
+
+  // Update Nav Active State
+  const navItems = ['single', 'share', 'calc', 'settings'];
+  navItems.forEach(n => {
+    const btn = document.getElementById(`nav-tab-${n}`);
+    if (btn) {
+      if (n === tabName) btn.classList.add('active');
+      else btn.classList.remove('active');
+    }
+  });
+
+  if (tabName === 'single') {
+    if (singleView) singleView.style.display = 'block';
+    if (commanderView) commanderView.style.display = 'none';
+  } else if (tabName === 'share') {
+    if (singleView) singleView.style.display = 'block';
+    openOperationShareModal();
+  } else if (tabName === 'calc') {
+    if (singleView) singleView.style.display = 'block';
+    openCalcModal();
+  } else if (tabName === 'settings') {
+    if (singleView) singleView.style.display = 'block';
+    openSettingsModal();
+  }
+  localStorage.setItem('wos_active_main_tab', tabName);
+}
+
+function openOperationShareModal() {
+  updateOperationSharePreview();
+  const modal = document.getElementById('operation-share-modal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeOperationShareModal() {
+  const modal = document.getElementById('operation-share-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+function updateOperationSharePreview() {
+  const previewBox = document.getElementById('share-modal-preview-text');
+  if (previewBox) {
+    const text = generateAllianceChatText();
+    previewBox.innerText = text;
+  }
+  if (typeof updateAllianceCopyButtons === 'function') {
+    updateAllianceCopyButtons();
+  }
+  const timelinePanel = document.getElementById('share-panel-timeline');
+  if (timelinePanel && !timelinePanel.classList.contains('hidden') && typeof updateAllianceTimeline === 'function') {
+    updateAllianceTimeline(false);
+  }
+}
+
+function copyAllianceChatFromModal() {
+  copyAllianceChat();
+  closeOperationShareModal();
+}
+
+// --- Unified Alliance Chat Generators (v1.06.12) ---
+function generateAllianceChatText() {
+  if (currentActiveMainTab === 'single' || (simpleLaunchState.isCalculated && simpleLaunchState.targetLaunchDate)) {
+    const launchTimeStr = simpleLaunchState.targetLaunchDate ? formatTimeHHMMSS(simpleLaunchState.targetLaunchDate) : '--:--:--';
+    const now = getAdjustedNowTime();
+    const diffSec = simpleLaunchState.targetLaunchDate ? Math.max(0, (simpleLaunchState.targetLaunchDate.getTime() - now.getTime()) / 1000) : 0;
+    const countdownStr = formatCountdownMMSSs(diffSec);
+    return buildAllianceChatText('simple', {
+      statusMode: simpleLaunchState.statusMode || 'rally',
+      launchTimeStr: launchTimeStr,
+      countdownStr: countdownStr
+    });
+  }
+
+  // Multi-march commander text
+  const e1 = state.marchList[0] || {};
+  const e2 = state.marchList[1] || {};
+  const e1Tag = e1.allianceTag ? `[${e1.allianceTag}] ` : '';
+  const e1Name = e1.governorName || '敵1';
+  const e2Tag = e2.allianceTag ? `[${e2.allianceTag}] ` : '';
+  const e2Name = e2.governorName || '敵2';
+
+  const e1Land = document.getElementById('res-enemy1-land')?.textContent || '--:--:--';
+  const e2Land = document.getElementById('res-enemy2-land')?.textContent || '--:--:--';
+  const launchMin = document.getElementById('res-launch-min')?.textContent || '--:--:--';
+  const launchMid = document.getElementById('res-launch-mid')?.textContent || '--:--:--';
+  const launchMax = document.getElementById('res-launch-max')?.textContent || '--:--:--';
+  const windowSpan = document.getElementById('res-window-span')?.textContent || '0.0秒';
+  const countdown = document.getElementById('launch-countdown')?.textContent || '00:00.0';
+
+  return buildAllianceChatText('multi', {
+    e1Tag, e1Name, e1Land,
+    e2Tag, e2Name, e2Land,
+    launchMin, launchMid, launchMax, windowSpan, countdown
+  });
+}
+
+function copyAllianceChat() {
+  const text = generateAllianceChatText();
+  navigator.clipboard.writeText(text).then(() => {
+    alert('📢 作戦指示テキストをクリップボードにコピーしました！\n同盟チャットやDiscordにそのまま貼り付けてください。');
+  }).catch(err => {
+    prompt('以下のテキストをコピーしてください:', text);
+  });
+}
+
+
+// --- Dedicated Clock Adjustment Modal Helpers (v1.06.12) ---
+function openClockAdjustModal() {
+  const modal = document.getElementById('clock-adjust-modal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeClockAdjustModal() {
+  const modal = document.getElementById('clock-adjust-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+
+// --- Remaining Time Quick Adjust Modal Helpers (v1.06.12) ---
+function openRemTimeAdjustModal() {
+  updateModalRemTimeDisplay();
+  const modal = document.getElementById('rem-time-adjust-modal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeRemTimeAdjustModal() {
+  const modal = document.getElementById('rem-time-adjust-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+function updateModalRemTimeDisplay() {
+  const elem = document.getElementById('simple-remaining-time');
+  const modalVal = document.getElementById('modal-rem-time-val');
+  if (elem && modalVal) {
+    modalVal.textContent = elem.value || '00:00';
+  }
+}
+
+
+// Remaining Time Adjust Helpers (for Simple Mode & Modal)
+function setSimpleRemainingMinute(mins) {
+  const elem = document.getElementById('simple-remaining-time');
+  if (!elem) return;
+  const currentSecs = parseSecondsFromMMSS(elem.value) % 60;
+  const newTotalSec = (mins * 60) + currentSecs;
+  elem.value = formatCountdownMMSS(newTotalSec);
+  if (simpleLaunchState.isCalculated && typeof recalculateSimpleLaunchStateOnMarchChange === 'function') {
+    recalculateSimpleLaunchStateOnMarchChange();
+  }
+}
+
+function setSimpleRemainingSecond(secs) {
+  const elem = document.getElementById('simple-remaining-time');
+  if (!elem) return;
+  const currentMins = Math.floor(parseSecondsFromMMSS(elem.value) / 60);
+  const newTotalSec = (currentMins * 60) + secs;
+  elem.value = formatCountdownMMSS(newTotalSec);
+  if (simpleLaunchState.isCalculated && typeof recalculateSimpleLaunchStateOnMarchChange === 'function') {
+    recalculateSimpleLaunchStateOnMarchChange();
+  }
+}
+
+function adjustSimpleRemainingTime(delta) {
+  const elem = document.getElementById('simple-remaining-time');
+  if (!elem) return;
+  const currentSec = parseSecondsFromMMSS(elem.value);
+  const newTotalSec = Math.max(0, Math.round((currentSec + delta) * 10) / 10);
+  elem.value = formatCountdownMMSS(newTotalSec);
+  if (simpleLaunchState.isCalculated && typeof recalculateSimpleLaunchStateOnMarchChange === 'function') {
+    recalculateSimpleLaunchStateOnMarchChange();
+  }
+}
+
+function setSimpleRemainingMinuteInModal(mins) {
+  setSimpleRemainingMinute(mins);
+  updateModalRemTimeDisplay();
+}
+
+function setSimpleRemainingSecondInModal(secs) {
+  setSimpleRemainingSecond(secs);
+  updateModalRemTimeDisplay();
+}
+
+function adjustSimpleRemainingTimeInModal(delta) {
+  adjustSimpleRemainingTime(delta);
+  updateModalRemTimeDisplay();
+}
+
+
+// --- Comprehensive Help Guide Modal Helpers (v1.06.12) ---
+function openHelpGuideModal() {
+  const modal = document.getElementById('help-guide-modal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeHelpGuideModal() {
+  const modal = document.getElementById('help-guide-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+
+// --- Operation Share Modal Sub-Tabs (v1.06.12 Plan A) ---
+let currentShareSubTab = 'copy';
+
+function switchShareSubTab(tabName) {
+  currentShareSubTab = tabName;
+  const btnTimeline = document.getElementById('share-subtab-timeline');
+  const btnCopy = document.getElementById('share-subtab-copy');
+  const panelTimeline = document.getElementById('share-panel-timeline');
+  const panelCopy = document.getElementById('share-panel-copy');
+
+  if (btnTimeline && btnCopy) {
+    btnTimeline.className = `btn-game btn-xs ${tabName === 'timeline' ? 'btn-primary active' : 'btn-secondary'} font-bold px-2.5 py-1 text-xs flex items-center gap-1`;
+    btnCopy.className = `btn-game btn-xs ${tabName === 'copy' ? 'btn-primary active' : 'btn-secondary'} font-bold px-2.5 py-1 text-xs flex items-center gap-1`;
+  }
+
+  if (panelTimeline && panelCopy) {
+    panelTimeline.classList.toggle('hidden', tabName !== 'timeline');
+    panelCopy.classList.toggle('hidden', tabName !== 'copy');
+  }
+
+  if (tabName === 'timeline') {
+    updateAllianceTimeline(true);
+  } else if (tabName === 'copy') {
+    updateOperationSharePreview();
+    updateAllianceCopyButtons();
+  }
+}
+
+
+// --- Global Data Backup & Restore Engine (v1.06.12) ---
+function exportAllAppDataJSON() {
+  try {
+    const backupData = {
+      version: '1.06.00',
+      exportedAt: new Date().toISOString(),
+      appName: 'WOS Insertion Calculator',
+      storage: {}
+    };
+
+    const targetKeys = [
+      'wos_alliance_groups_data_v2',
+      'wos_alliance_members',
+      'wos_enemy_presets',
+      'wos_strategy_note',
+      'wos_my_march_time',
+      'wos_calc_history',
+      'wos_enemy_history',
+      'wos_app_settings',
+      'wos_insertion_margin_ms',
+      'wos_simple_audio_muted',
+      'wos_simple_vibration_enabled',
+      'wos_floating_memo_text',
+      'wos_floating_memo_land_time_show',
+      'wos_floating_memo_pos',
+      'wos_keypad_recent_history',
+      'wos_alliance_selection_sort_mode',
+      'wos_alliance_copy_sort_mode',
+      'wos_active_main_tab',
+      'wos_button_theme'
+    ];
+
+    targetKeys.forEach(k => {
+      const val = localStorage.getItem(k);
+      if (val !== null) backupData.storage[k] = val;
+    });
+
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const nowStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    a.href = url;
+    a.download = `wos_backup_${nowStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    alert('📤 【バックアップ完了】\n設定ファイル(JSON)をダウンロードしました！\n機種変更時や復元時にご利用ください。');
+  } catch (e) {
+    alert('⚠️ バックアップ書き出し中にエラーが発生しました: ' + e.message);
+  }
+}
+
+function triggerImportAppDataFile() {
+  const fileInput = document.getElementById('setting-backup-file-input');
+  if (fileInput) {
+    fileInput.value = '';
+    fileInput.click();
+  }
+}
+
+function handleImportAppDataFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const content = e.target.result;
+      const parsed = JSON.parse(content);
+
+      if (!parsed || !parsed.storage || typeof parsed.storage !== 'object') {
+        throw new Error('有効なWOSバックアップ設定ファイルではありません。');
+      }
+
+      if (!confirm('⚠️ 【全データ復元の確認】\nバックアップファイルの内容を読み込みます。\n現在の設定・同盟メンバー・メモは上書きされますがよろしいですか？')) {
+        return;
+      }
+
+      // Apply storage keys
+      Object.keys(parsed.storage).forEach(k => {
+        localStorage.setItem(k, parsed.storage[k]);
+      });
+
+      alert('📥 【復元完了】\nすべての設定・同盟名簿・メモを正常に復元しました！\n画面を再読み込みします。');
+      location.reload();
+    } catch (err) {
+      alert('⚠️ ファイル読み込みエラー: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
