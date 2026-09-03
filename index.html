@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ホワサバ 差し込み計算＆マルチ行軍トラッカー (v1.06.14 βテスト版)</title>
+  <title>ホワサバ 差し込み計算＆マルチ行軍トラッカー (v1.06.26 βテスト版)</title>
   <meta name="description" content="Whiteout Survival(ホワサバ) 0.1秒精度 差し込み計算＆マルチ行軍トラッカー">
   <meta name="theme-color" content="#00f0ff">
   
@@ -21,12 +21,12 @@
   <div id="app-container">
 
     <!-- Title / Opening Splash Screen (v1.03.29 Standard Container Size & Decorative Frame Button Alignment) -->
-    <div id="splash-screen" onclick="this.style.display='none'; if(typeof initAudio==='function') initAudio();">
+    <div id="splash-screen" onclick="if(typeof hideSplash==='function'){ hideSplash(); } else { this.style.display='none'; if(typeof initAudio==='function') initAudio(); if(typeof checkAndTriggerOnboarding==='function') checkAndTriggerOnboarding(); }">
       <div class="splash-app-container">
         <!-- Top Title Header (Above Image Artwork) -->
         <div class="splash-top-header mb-2">
           <h1 class="splash-title-text">⚔️ WHITEOUT SURVIVAL</h1>
-          <p class="splash-subtitle-text">差し込み計算 ＆ シングル/同盟一斉統合モード v1.06.14 βテスト版</p>
+          <p class="splash-subtitle-text">差し込み計算 ＆ シングル/同盟一斉統合モード v1.06.26 βテスト版</p>
         </div>
 
         <!-- Square Artwork Container -->
@@ -43,14 +43,14 @@
     </div>
 
     <!-- Main Header Bar (Sticky Top - v1.03.31 2-Row Top Title & Version Layout) -->
-        <!-- Modern Slim Sticky Header (v1.06.14) -->
+        <!-- Modern Slim Sticky Header (v1.06.26) -->
     <header id="main-header" class="sticky-header">
       <!-- 1st Row: Slim Title & Quick Controls -->
       <div class="flex items-center justify-between gap-2 px-1 pb-1 border-b border-cyan-500/20">
         <div class="flex items-center gap-1.5">
           <i class="fa-solid fa-shield-halved text-cyan-400 text-base"></i>
           <span class="font-black text-cyan-400 text-sm sm:text-base tracking-wide whitespace-nowrap">WOS 差込計算</span>
-          <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 shadow">v1.06.14</span>
+          <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 shadow">v1.06.26</span>
         </div>
         
         <div class="flex items-center gap-1">
@@ -82,7 +82,7 @@
       </div>
     </header>
 
-    <!-- Dedicated Clock Adjustment Modal (v1.06.14 Standalone Focus) -->
+    <!-- Dedicated Clock Adjustment Modal (v1.06.26 Standalone Focus) -->
     <div id="clock-adjust-modal" class="modal-backdrop">
       <div class="modal-body max-w-sm bg-black/95 border-2 border-cyan-400/90 rounded-2xl shadow-2xl p-4 space-y-3.5 text-center">
         <div class="flex justify-between items-center border-b border-cyan-500/40 pb-2">
@@ -179,7 +179,7 @@
     </div>
 
     <!-- Mode v1.02.04 Trial: Super Simple Launch Mode Card (Status Mode Toggle: Rally / March) -->
-    <!-- Main Content Area (v1.06.14) -->
+    <!-- Main Content Area (v1.06.26) -->
     
     <!-- ==================== TAB 1: 個人（シングルモード特化） ==================== -->
     <div id="tab-content-single" class="tab-content-view space-y-3">
@@ -200,17 +200,17 @@
         </div>
 
         <!-- 2. Direct 3-Input Block (自分 / 相手 / 残り時間+OCR) -->
-        <div class="bg-black/60 p-3 rounded-xl border border-cyan-500/30 space-y-3">
+        <div id="simple-input-block" class="bg-black/60 p-3 rounded-xl border border-cyan-500/30 space-y-3">
           
           <!-- Row 1: My March & Enemy March -->
           <div class="grid grid-cols-2 gap-2 items-start">
             <div class="input-group flex flex-col justify-start">
               <label class="text-cyan-300 font-bold text-xs leading-none mb-1.5 h-4 flex items-center">① 自分の行軍時間 (MM:SS)</label>
-              <input type="text" id="simple-my-march" class="game-input text-digital text-center font-bold text-cyan-300 text-base cursor-pointer hover:border-cyan-400 transition-colors h-12" value="01:30" placeholder="01:30" readonly onclick="openSingleInputKeypad('simple-my-march', '自分の行軍時間')">
+              <input type="text" id="simple-my-march" class="game-input text-digital text-center font-bold text-cyan-300 text-base cursor-pointer hover:border-cyan-400 transition-colors h-12" value="00:05" placeholder="00:05" readonly onclick="openSingleInputKeypad('simple-my-march', '自分の行軍時間')">
             </div>
             <div class="input-group flex flex-col justify-start" id="group-simple-enemy-march">
               <label class="text-yellow-300 font-bold text-xs leading-none mb-1.5 h-4 flex items-center">② 相手の行軍時間 (MM:SS)</label>
-              <input type="text" id="simple-enemy-march" class="game-input text-digital text-center font-bold text-yellow-300 text-base cursor-pointer hover:border-yellow-400 transition-colors h-12" value="02:15" placeholder="02:15" readonly onclick="openSingleInputKeypad('simple-enemy-march', '相手の行軍時間')">
+              <input type="text" id="simple-enemy-march" class="game-input text-digital text-center font-bold text-yellow-300 text-base cursor-pointer hover:border-yellow-400 transition-colors h-12" value="00:10" placeholder="00:10" readonly onclick="openSingleInputKeypad('simple-enemy-march', '相手の行軍時間')">
             </div>
           </div>
 
@@ -221,7 +221,7 @@
             </div>
             
             <div class="flex gap-1.5 items-stretch">
-              <input type="text" id="simple-remaining-time" class="game-input text-digital text-center font-black text-yellow-300 text-lg sm:text-xl flex-1 min-w-0 px-1 cursor-pointer hover:border-yellow-400 transition-colors py-2" value="03:00" placeholder="03:00" readonly onclick="openSingleInputKeypad('simple-remaining-time', '相手の集結残り時間')">
+              <input type="text" id="simple-remaining-time" class="game-input text-digital text-center font-black text-yellow-300 text-lg sm:text-xl flex-1 min-w-0 px-1 cursor-pointer hover:border-yellow-400 transition-colors py-2" value="00:15" placeholder="00:15" readonly onclick="openSingleInputKeypad('simple-remaining-time', '相手の集結残り時間')">
               
               <!-- Quick Time Adjust Modal Trigger -->
               <button id="btn-open-rem-adjust" class="btn-game btn-sm btn-secondary font-bold text-xs px-2 rounded-xl border border-yellow-500/50 shadow flex items-center justify-center gap-1 whitespace-nowrap flex-shrink-0" onclick="openRemTimeAdjustModal()" title="残り時間の分・秒・コンマ秒をクイック調整">
@@ -258,7 +258,7 @@
             <i class="fa-solid fa-crosshairs text-yellow-400"></i> 出発予定時刻 (目標着弾に合わせて自動算出)
           </div>
           
-          <div class="grid grid-cols-[76px_1fr_76px] items-center py-1 bg-yellow-950/40 p-2 rounded-lg border border-yellow-500/50 shadow-inner">
+          <div id="simple-launch-time-hero" class="grid grid-cols-[76px_1fr_76px] items-center py-1 bg-yellow-950/40 p-2 rounded-lg border border-yellow-500/50 shadow-inner">
             <button id="simple-tz-badge" class="w-[76px] py-1 rounded-lg text-xs font-black tracking-wide border shadow-md transition-all flex items-center justify-center gap-1 bg-cyan-950/90 border-cyan-400 text-cyan-300 whitespace-nowrap select-none cursor-pointer active:scale-95" onclick="toggleTimezoneBadge()" title="タップで JST / UTC 切替">
               <span>🇯🇵 JST</span>
             </button>
@@ -470,7 +470,7 @@
 
 
   <!-- Bottom Navigation Bar -->
-    <!-- Modern 5-Hub Bottom Navigation Bar (v1.06.14) -->
+    <!-- Modern 5-Hub Bottom Navigation Bar (v1.06.26) -->
   <nav class="bottom-nav">
     <button class="nav-item active" id="nav-tab-single" onclick="switchMainTab('single')">
       <i class="fa-solid fa-user text-lg text-cyan-400"></i>
@@ -490,7 +490,7 @@
     </button>
   </nav>
 
-  <!-- Modern Operation Share & Timeline Hub Modal (v1.06.14 Plan A) -->
+  <!-- Modern Operation Share & Timeline Hub Modal (v1.06.26 Plan A) -->
   <div id="operation-share-modal" class="modal-backdrop !items-start !pt-5 sm:!pt-8" style="align-items: flex-start !important; padding-top: 20px !important;">
     <div class="modal-body max-w-lg w-[96vw] max-h-[90vh] flex flex-col bg-black/95 border-2 border-amber-500/80 rounded-2xl shadow-2xl p-3.5 space-y-2.5 text-xs !mt-0" style="margin-top: 0 !important; align-self: flex-start !important;">
       
@@ -598,7 +598,7 @@
     </div>
   </div>
 
-  <!-- Triple Mode Calculator Modal (v1.06.14 Exact Fixed Height matching Converter/Speedup) -->
+  <!-- Triple Mode Calculator Modal (v1.06.26 Exact Fixed Height matching Converter/Speedup) -->
   <div id="calc-modal" class="modal-backdrop">
     <div class="modal-body max-w-md w-[96vw] h-[660px] max-h-[85vh] flex flex-col p-3.5 space-y-2 text-xs bg-slate-900 border-2 border-cyan-400/90 rounded-2xl shadow-2xl">
       <!-- Fixed Header: Top Tab Switchers (Strict 1-Row Grid Layout) -->
@@ -857,7 +857,7 @@
   <div id="settings-modal" class="modal-backdrop">
     <div class="modal-body">
       <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-bold text-cyan-400"><i class="fa-solid fa-gear mr-2"></i> アプリ設定 (v1.06.14 βテスト版)</h3>
+        <h3 class="text-lg font-bold text-cyan-400"><i class="fa-solid fa-gear mr-2"></i> アプリ設定 (v1.06.26 βテスト版)</h3>
         <button class="text-gray-400 text-xl font-bold p-1" onclick="closeSettingsModal()">&times;</button>
       </div>
 
@@ -865,6 +865,21 @@
         <div class="flex justify-between items-center border-b border-gray-700 pb-2">
           <span>起動時のタイトル画面をスキップ</span>
           <input type="checkbox" id="setting-skip-splash" class="w-5 h-5 accent-cyan-400">
+        </div>
+
+
+        <!-- 🧪 Debug Tool: Reset Onboarding Flag to test pristine first launch -->
+        <div class="bg-black/50 p-2.5 rounded-xl border border-yellow-500/40 flex items-center justify-between gap-2 shadow-inner">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-flask text-yellow-300 text-base"></i>
+            <div>
+              <div class="font-bold text-yellow-300 text-xs">🧪 初回起動フラグのリセット (テスト用)</div>
+              <div class="text-[10px] text-gray-300">初回起動時の自動ツアー演出を何度でも検証できます</div>
+            </div>
+          </div>
+          <button type="button" id="btn-reset-onboarding-flag" class="btn-game btn-xs bg-yellow-950/90 border border-yellow-400 text-yellow-300 font-bold px-3 py-2 rounded-xl shadow whitespace-nowrap active:scale-95 hover:bg-yellow-900" onclick="resetOnboardingFlagForDebug()" title="初回フラグをOFFにして再起動テスト">
+            <span>🔄 フラグ解除</span>
+          </button>
         </div>
 
         <div class="flex justify-between items-center border-b border-gray-700 pb-2">
@@ -895,7 +910,7 @@
           <input type="checkbox" id="setting-vibration" class="w-5 h-5 accent-cyan-400" checked onchange="handleSettingVibrationChange(this.checked)">
         </div>
 
-        <!-- 🎯 Insertion Margin Offset Selection (+0.1s / +0.3s / +0.5s) (v1.06.14) -->
+        <!-- 🎯 Insertion Margin Offset Selection (+0.1s / +0.3s / +0.5s) (v1.06.26) -->
         <div class="border-b border-gray-700 pb-3">
           <div class="flex justify-between items-center mb-1.5">
             <label class="font-bold text-amber-300 flex items-center gap-1.5 text-xs sm:text-sm">
@@ -944,7 +959,7 @@
 
 
         
-        <!-- 💾 Global Backup & Restore (v1.06.14) -->
+        <!-- 💾 Global Backup & Restore (v1.06.26) -->
         <div class="bg-black/60 p-3 rounded-xl border border-cyan-500/40 space-y-2 mt-2">
           <div class="flex justify-between items-center">
             <label class="font-bold text-cyan-300 flex items-center gap-1.5 text-xs sm:text-sm">
@@ -1253,7 +1268,7 @@
   </div>
 
   
-    <!-- Dedicated Remaining Time Quick Adjust Modal (v1.06.14) -->
+    <!-- Dedicated Remaining Time Quick Adjust Modal (v1.06.26) -->
     <div id="rem-time-adjust-modal" class="modal-backdrop">
       <div class="modal-body max-w-sm bg-black/95 border-2 border-yellow-400/90 rounded-2xl shadow-2xl p-4 space-y-3.5 text-center">
         <div class="flex justify-between items-center border-b border-yellow-500/40 pb-2">
@@ -1316,7 +1331,7 @@
 
   
   
-  <!-- Comprehensive Help Guide Modal (v1.06.14 All ? Descriptions Integrated) -->
+  <!-- Comprehensive Help Guide Modal (v1.06.26 All ? Descriptions Integrated) -->
   <div id="help-guide-modal" class="modal-backdrop">
     <div class="modal-body max-w-lg bg-black/95 border-2 border-cyan-400/90 rounded-2xl shadow-2xl p-4 space-y-3.5 text-xs">
       <div class="flex justify-between items-center border-b border-cyan-500/40 pb-2">
@@ -1325,6 +1340,19 @@
           <span>WOS 差込計算ツール 総合ヘルプ・機能解説マニュアル</span>
         </div>
         <button class="text-gray-400 hover:text-white text-xl font-bold p-1 leading-none" onclick="closeHelpGuideModal()">&times;</button>
+      </div>
+
+      <!-- 🔰 Dedicated Yan-chan Tour Banner in Help Modal -->
+      <div class="bg-gradient-to-r from-purple-950/80 to-indigo-950/80 p-2 rounded-xl border border-purple-400/60 flex items-center justify-between gap-2 shadow mb-2">
+        <div class="flex items-center gap-2">
+          <img src="guide-character.webp" alt="やんちゃん" class="w-7 h-7 rounded-full border border-yellow-300 object-cover shadow flex-shrink-0">
+          <div class="text-[11px] font-bold text-yellow-300">
+            やんちゃんの超速3ステップ体験ツアー
+          </div>
+        </div>
+        <button type="button" id="btn-help-restart-tour" class="btn-game btn-xs bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black px-2.5 py-1.5 rounded-lg shadow text-[11px] whitespace-nowrap active:scale-95" onclick="closeHelpGuideModal(); startOnboardingTour(true);">
+          <span>🔰 ツアー体験</span>
+        </button>
       </div>
 
       <!-- Quick Category Jump Tabs -->
@@ -1608,10 +1636,10 @@
   </div>
 
 
-  <!-- v1.06.14: Screenshot OCR Result Preview & Multi-Target Selection Modal -->
+  <!-- v1.06.26: Screenshot OCR Result Preview & Multi-Target Selection Modal -->
   <div id="ocr-preview-modal" class="modal-backdrop !items-start !pt-3 !pb-20" style="z-index: 100010; align-items: flex-start !important; padding-top: 12px !important; padding-bottom: 84px !important;">
     <div class="modal-body max-w-lg w-[98vw] sm:w-[96vw] max-h-[calc(100vh-64px)] flex flex-col bg-black/95 border-2 border-cyan-400/90 rounded-2xl shadow-2xl p-2.5 space-y-1.5 !mt-0" style="margin-top: 0 !important; align-self: flex-start !important;">
-      <!-- Compact Modal Header (v1.06.14 Maximized Viewport) -->
+      <!-- Compact Modal Header (v1.06.26 Maximized Viewport) -->
       <div class="flex justify-between items-center border-b border-cyan-500/40 pb-1.5">
         <div class="font-black text-cyan-300 text-xs sm:text-sm flex items-center gap-1.5">
           <i class="fa-solid fa-wand-magic-sparkles text-yellow-300"></i>
@@ -1650,7 +1678,7 @@
         </div>
 
         
-        <!-- ✍️ Manual Direct Input / Correction Toggle Button & Card (v1.06.14) -->
+        <!-- ✍️ Manual Direct Input / Correction Toggle Button & Card (v1.06.26) -->
         <div id="ocr-manual-section" class="space-y-1.5">
           <!-- Toggle Button (Shown when collapsed) -->
           <button id="ocr-manual-toggle-btn" type="button" class="w-full py-1.5 px-3 rounded-xl border border-amber-500/60 bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 font-bold text-xs flex items-center justify-between transition-all" onclick="toggleOcrManualSection()">
@@ -1707,10 +1735,57 @@
   </div>
 
   <!-- Custom JS -->
-  <script src="app.js?v=1.06.14"></script>
+  <script src="app.js?v=1.06.22"></script>
 
-    <!-- Floating Toast / Snackbar Notification (v1.06.14) -->
-    <div id="toast-container" style="position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 9999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;"></div>
+    <!-- Floating Toast / Snackbar Notification (v1.06.26) -->
+    <div id="toast-container" style="position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 9999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;"></div>
   
+
+  <!-- 🔰 Interactive Onboarding Tour Overlay & Yan-chan Dialog (v1.06.26) -->
+  <div id="onboarding-overlay" class="hidden">
+    <!-- SVG Mask with transparent cutout hole -->
+    <svg id="onboarding-svg-mask" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <mask id="onboarding-cutout-mask">
+          <rect x="0" y="0" width="100%" height="100%" fill="white" />
+          <rect id="onboarding-hole-rect" x="0" y="0" width="0" height="0" rx="16" fill="black" />
+        </mask>
+      </defs>
+      <rect x="0" y="0" width="100%" height="100%" fill="rgba(4, 8, 18, 0.82)" mask="url(#onboarding-cutout-mask)" />
+    </svg>
+
+    <!-- Glowing Animated Spotlight Border Frame over the cutout -->
+    <div id="onboarding-spotlight-border" style="display: none;"></div>
+
+    <div id="onboarding-dialog-card" class="pos-bottom">
+      <!-- Header with Inline Avatar docked inside card top-left -->
+      <div class="flex items-center justify-between gap-2.5 pb-1 border-b border-cyan-500/20">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <img src="guide-character.webp" alt="やんちゃん" class="yan-chan-avatar">
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="font-black text-amber-300 text-xs tracking-wide whitespace-nowrap">🦈 やんちゃんナビ</span>
+              <span id="onboarding-step-badge" class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-cyan-950 border border-cyan-400 text-cyan-300 whitespace-nowrap">STEP 1/3</span>
+            </div>
+            <h4 id="onboarding-title" class="font-black text-white text-xs sm:text-sm mt-0.5 truncate">① 自分と相手の時間をセット！</h4>
+          </div>
+        </div>
+        <button type="button" class="text-gray-400 hover:text-white text-xl font-bold p-1 leading-none cursor-pointer flex-shrink-0" onclick="skipOnboardingTour()" title="ツアーをスキップ">&times;</button>
+      </div>
+      <div class="mt-2 bg-black/60 p-2.5 rounded-xl border border-cyan-500/30">
+        <p id="onboarding-desc" class="text-xs text-gray-200 leading-relaxed">
+          まずは行軍時間と、相手の残り時間をセット！✨<br><span class="text-amber-300 font-bold">（すぐに試せるサンプル値をセットしたよ！）</span>
+        </p>
+      </div>
+
+      <div class="mt-3 flex items-center justify-between gap-2">
+        <button type="button" class="text-[11px] text-gray-400 hover:text-gray-200 font-bold underline px-1 py-1" onclick="skipOnboardingTour()">スキップ</button>
+        <button type="button" id="btn-onboarding-action" class="btn-game btn-sm bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black px-4 py-2 text-xs rounded-xl shadow-lg flex items-center gap-1" onclick="handleOnboardingNext()">
+          <span>次へ（計算してみる） ▶</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

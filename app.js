@@ -1,5 +1,5 @@
 
-// --- Security: HTML Injection / XSS Protection Helper (v1.06.14) ---
+// --- Security: HTML Injection / XSS Protection Helper (v1.06.26) ---
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -623,7 +623,7 @@ function playBeep(freq = 880, type = 'sine', duration = 0.15) {
 }
 
 
-// --- Screen Wake Lock Manager (v1.06.14) ---
+// --- Screen Wake Lock Manager (v1.06.26) ---
 let wakeLockInstance = null;
 
 async function requestScreenWakeLock() {
@@ -659,13 +659,13 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 
-// --- Toast / Snackbar Notification Helper (v1.06.14) ---
+// --- Toast / Snackbar Notification Helper (v1.06.26) ---
 function showToast(message, type = 'success', duration = 2200) {
   let container = document.getElementById('toast-container');
   if (!container) {
     container = document.createElement('div');
     container.id = 'toast-container';
-    container.style.cssText = 'position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 9999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;';
+    container.style.cssText = 'position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 9999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;';
     document.body.appendChild(container);
   }
 
@@ -693,7 +693,7 @@ function showToast(message, type = 'success', duration = 2200) {
   }, duration);
 }
 
-// --- Vibration Feedback Helper (v1.06.14) ---
+// --- Vibration Feedback Helper (v1.06.26) ---
 function triggerVibration(pattern) {
   try {
     if ('vibrate' in navigator && isSimpleVibrationEnabled) {
@@ -2411,7 +2411,7 @@ function loadAppSettings() {
 
 // Button Design Theme Management (Neon / Emerald / Gold)
 
-// --- Insertion Margin Offset Engine (v1.06.14: +0.1s / +0.3s / +0.5s) ---
+// --- Insertion Margin Offset Engine (v1.06.26: +0.1s / +0.3s / +0.5s) ---
 function getInsertionMarginMs() {
   if (state.settings && typeof state.settings.insertionMarginMs === 'number') {
     return state.settings.insertionMarginMs;
@@ -2641,7 +2641,7 @@ function updateAllToggleButtonsUI() {
 
 // v1.03.09 Audio Mute Control for Simple Mode
 
-// v1.06.14 Vibration ON/OFF Control
+// v1.06.26 Vibration ON/OFF Control
 
 // Handlers for Audio Alert & Vibration settings checkboxes
 function handleSettingAudioChange(enabled) {
@@ -2788,7 +2788,14 @@ function initApp() {
       splash.classList.add('hidden');
       setTimeout(() => splash.style.display = 'none', 600);
     }
+    // v1.06.26: スプラッシュ消去後に初回オンボーディングツアーを自動判定＆起動
+    setTimeout(() => {
+      if (typeof checkAndTriggerOnboarding === 'function') {
+        checkAndTriggerOnboarding();
+      }
+    }, 450);
   };
+  window.hideSplash = hideSplash;
 
   const startBtn = document.getElementById('btn-start');
   const splashContainer = document.getElementById('splash-screen');
@@ -2932,6 +2939,15 @@ function initApp() {
   });
 
   // Local Storage and App state fully initialized
+  // v1.06.26: スプラッシュが非表示状態の場合の初回オンボーディング自動起動フォールバック
+  const splashEl = document.getElementById('splash-screen');
+  if (splashEl && (splashEl.style.display === 'none' || splashEl.classList.contains('hidden'))) {
+    setTimeout(() => {
+      if (typeof checkAndTriggerOnboarding === 'function') {
+        checkAndTriggerOnboarding();
+      }
+    }, 600);
+  }
 }
 
 if (document.readyState === 'loading') {
@@ -3066,6 +3082,81 @@ function saveStrategyNote() {
     alert('作戦メモを保存しました！');
   }
 }
+
+
+/**
+ * 差し込み計算進行中のリアルタイム再計算エンジン (v1.06.26)
+ * 集結中/行軍中の切替、行軍時間の変更、残り時間調整時に瞬時に着弾＆発車時刻を再計算
+ */
+function recalculateSimpleLaunchStateOnMarchChange(showVisualFeedback = false, overrideRemSec = null) {
+  if (!simpleLaunchState.isCalculated) return;
+
+  const myStr = document.getElementById('simple-my-march')?.value || '';
+  const enemyStr = document.getElementById('simple-enemy-march')?.value || '';
+  const remInput = document.getElementById('simple-remaining-time');
+  const remStr = remInput?.value || '';
+
+  const mySec = parseSecondsFromMMSS(myStr);
+  const enemySec = parseSecondsFromMMSS(enemyStr);
+  
+  const now = getAdjustedNowTime();
+  let currentRemSec;
+
+  if (overrideRemSec !== null && overrideRemSec !== undefined) {
+    // ユーザーが調整ボタン等で明示的に残り時間を変更した場合：新しい基準値として同期！
+    currentRemSec = Math.max(0, overrideRemSec);
+    simpleLaunchState.startRemSec = currentRemSec;
+    simpleLaunchState.calcStartTime = new Date(now.getTime());
+    if (remInput) remInput.value = formatCountdownMMSS(currentRemSec);
+    const modalRemVal = document.getElementById('modal-rem-time-val');
+    if (modalRemVal) modalRemVal.textContent = formatCountdownMMSS(currentRemSec);
+  } else {
+    // 通常の行軍時間変更やモード切替の場合：経過時間を維持して計算
+    currentRemSec = parseSecondsFromMMSS(remStr);
+    if (simpleLaunchState.calcStartTime) {
+      const elapsedSec = (now.getTime() - simpleLaunchState.calcStartTime.getTime()) / 1000;
+      currentRemSec = Math.max(0, simpleLaunchState.startRemSec - elapsedSec);
+    }
+  }
+
+  let rallyFinishDate;
+  let enemyLandDate;
+
+  if (simpleLaunchState.statusMode === 'rally') {
+    rallyFinishDate = new Date(now.getTime() + currentRemSec * 1000);
+    enemyLandDate = new Date(rallyFinishDate.getTime() + enemySec * 1000);
+  } else {
+    rallyFinishDate = null;
+    enemyLandDate = new Date(now.getTime() + currentRemSec * 1000);
+  }
+
+  const targetLaunchDate = new Date(enemyLandDate.getTime() + getInsertionMarginMs() - mySec * 1000);
+
+  // Update state without interrupting running countdown
+  simpleLaunchState.rallyFinishDate = rallyFinishDate;
+  simpleLaunchState.enemyLandDate = enemyLandDate;
+  simpleLaunchState.targetLaunchDate = targetLaunchDate;
+  simpleLaunchState.myMarchSec = mySec;
+  simpleLaunchState.enemyMarchSec = enemySec;
+
+  // Immediate UI update
+  updateSimpleCountdown();
+  updateAllianceTimeline();
+
+  // Visual & toast feedback
+  if (showVisualFeedback) {
+    const resultBox = document.getElementById('simple-result-box');
+    if (resultBox) {
+      resultBox.classList.remove('recalc-flash');
+      // Trigger reflow to restart CSS animation
+      void resultBox.offsetWidth;
+      resultBox.classList.add('recalc-flash');
+    }
+    const modeName = simpleLaunchState.statusMode === 'rally' ? '相手が集結中' : '相手が行軍中';
+    showToast(`🔄 ${modeName} に合わせて再計算しました！`, 'info', 1800);
+  }
+}
+window.recalculateSimpleLaunchStateOnMarchChange = recalculateSimpleLaunchStateOnMarchChange;
 
 // === v1.02.02 TRIAL: Super Simple Launch Mode Controller ===
 function setSimpleStatusMode(mode) {
@@ -3362,7 +3453,7 @@ function updateSimpleCountdown() {
 // v1.03.13 Forced Stop & Clean Reset Calculation
 function resetSimpleLaunchCalculation() {
   resetAllianceCopyStatus();
-  const startSec = simpleLaunchState.startRemSec || 180;
+  const startSec = simpleLaunchState.startRemSec || 15;
   
   simpleLaunchState.isCalculated = false;
   delete simpleLaunchState.calcStartTime;
@@ -4284,7 +4375,7 @@ let keypadInputBuffer = ''; // Stores typed raw digits like "25" (25s) or "130" 
 
 
 
-// --- March Time Keypad Preset & Recent History Engine (v1.06.14) ---
+// --- March Time Keypad Preset & Recent History Engine (v1.06.26) ---
 let keypadRecentHistory = [15, 20, 25, 30]; // Sensible default initial history!
 try {
   const savedHistory = localStorage.getItem('wos_keypad_recent_history');
@@ -4684,43 +4775,103 @@ function updateAllianceCopyButtons() {
   const limitPerChunk = 9;
   const nowTimeMs = getAdjustedNowTime().getTime();
 
-  // If calculation not started yet
-  if (!simpleLaunchState.isCalculated || !simpleLaunchState.enemyLandDate) {
-    if (selectedCount <= limitPerChunk) {
+  // === CASE A: 9名以下 (単一全メンバーコピーボタン) ===
+  if (selectedCount <= limitPerChunk) {
+    const isCalculated = simpleLaunchState.isCalculated && !!simpleLaunchState.enemyLandDate;
+    let btnClass = 'btn-game btn-sm w-full py-2.5 font-black text-xs sm:text-sm tracking-wide shadow flex items-center justify-center gap-1.5 whitespace-nowrap transition-all';
+    let btnContent = '';
+
+    if (!isCalculated) {
+      btnClass += ' btn-primary';
+      btnContent = `<i class="fa-solid fa-copy text-yellow-300"></i> <span>📋 選択メンバー全員の指示をコピー (${sortModeTitle})</span>`;
+    } else {
+      const enemyLandDate = simpleLaunchState.enemyLandDate;
+      const memberWithDates = selectedMembers.map(m => {
+        const targetLaunchDate = new Date(enemyLandDate.getTime() + getInsertionMarginMs() - m.marchSec * 1000);
+        return { member: m, targetLaunchDate, launchTimeMs: targetLaunchDate.getTime() };
+      });
+      const isExpired = memberWithDates.length > 0 && memberWithDates.every(item => nowTimeMs > item.launchTimeMs);
+      const isCopied = copiedAlliancePartIds.has('single');
+
+      if (isExpired) {
+        btnClass += ' bg-rose-950/90 border-2 border-rose-500 text-rose-300 opacity-80 cursor-not-allowed';
+        btnContent = `<i class="fa-solid fa-circle-xmark text-rose-400"></i> <span>❌ 時間超過 (全メンバー発車済)</span>`;
+      } else if (isCopied) {
+        btnClass += ' bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.5)]';
+        btnContent = `<i class="fa-solid fa-check-double text-emerald-200"></i> <span>✓ 全員分の指示 コピー済 (${sortModeTitle})</span>`;
+      } else {
+        btnClass += ' btn-primary';
+        btnContent = `<i class="fa-solid fa-copy text-yellow-300"></i> <span>📋 選択メンバー全員の指示をコピー (${sortModeTitle})</span>`;
+      }
+    }
+
+    const existingBtn = container.querySelector('#btn-copy-alliance-multi-chat');
+    if (existingBtn && container.children.length === 1) {
+      if (existingBtn.className !== btnClass) existingBtn.className = btnClass;
+      if (existingBtn.innerHTML.trim() !== btnContent.trim()) existingBtn.innerHTML = btnContent;
+    } else {
       container.innerHTML = `
-        <button id="btn-copy-alliance-multi-chat" class="btn-game btn-sm btn-primary w-full py-2.5 font-black text-xs sm:text-sm tracking-wide shadow flex items-center justify-center gap-1.5 whitespace-nowrap" onclick="copyAllianceMultiChat(1, 0, 'single')">
-          <i class="fa-solid fa-copy text-yellow-300"></i> <span>📋 選択メンバー全員の指示をコピー (${sortModeTitle})</span>
+        <button id="btn-copy-alliance-multi-chat" class="${btnClass}" onclick="copyAllianceMultiChat(1, 0, 'single')">
+          ${btnContent}
         </button>
       `;
-    } else {
-      const totalParts = Math.ceil(selectedCount / limitPerChunk);
-      let html = `
-        <div class="text-[10px] text-yellow-300 font-bold bg-yellow-950/60 p-1.5 rounded border border-yellow-500/40 text-center truncate">
-          ⚠️ ホワサバ改行対策: ${selectedCount}名を 9名ずつ(全${totalParts}回) 分割送信
-        </div>
-        <div class="grid grid-cols-${Math.min(totalParts, 2)} gap-1.5">
-      `;
-      for (let part = 1; part <= totalParts; part++) {
-        const startIdx = (part - 1) * limitPerChunk;
-        const endIdx = Math.min(part * limitPerChunk, selectedCount);
-        html += `
-          <button class="btn-game btn-sm btn-accent py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0" onclick="copyAllianceMultiChat(${part}, ${limitPerChunk}, 'part_${part}')">
-            <span class="flex items-center gap-1 text-[11px] sm:text-xs">
-              <i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i> 📋 Part ${part}/${totalParts}
-            </span>
-            <span class="text-[10px] opacity-90 font-mono">(${startIdx + 1}〜${endIdx}人目)</span>
-          </button>
-        `;
-      }
-      html += `</div>`;
-      container.innerHTML = html;
     }
     return;
   }
 
-  const enemyLandDate = simpleLaunchState.enemyLandDate;
+  // === CASE B: 10名以上 (全Part分割グリッドボタン) ===
+  const totalParts = Math.ceil(selectedCount / limitPerChunk);
+  const grid = container.querySelector('.alliance-parts-grid');
 
-  // Build unified member list with exact launch dates
+  // DOM要素が存在し、子ボタン数が一致している場合はDOMを壊さず再利用！
+  if (!grid || grid.children.length !== totalParts) {
+    let html = `
+      <div class="text-[10px] text-yellow-300 font-bold bg-yellow-950/60 p-1.5 rounded border border-yellow-500/40 text-center truncate">
+        ⚠️ ホワサバ改行対策: ${selectedCount}名を 9名ずつ(全${totalParts}回) 分割送信
+      </div>
+      <div class="alliance-parts-grid grid grid-cols-${Math.min(totalParts, 2)} gap-1.5">
+    `;
+    for (let part = 1; part <= totalParts; part++) {
+      const startIdx = (part - 1) * limitPerChunk;
+      const endIdx = Math.min(part * limitPerChunk, selectedCount);
+      html += `
+        <button id="btn-alliance-part-${part}" class="btn-game btn-sm btn-accent py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0 transition-all" onclick="copyAllianceMultiChat(${part}, ${limitPerChunk}, 'part_${part}')">
+          <span class="flex items-center gap-1 text-[11px] sm:text-xs">
+            <i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i> 📋 Part ${part}/${totalParts}
+          </span>
+          <span class="text-[10px] opacity-90 font-mono">(${startIdx + 1}〜${endIdx}人目)</span>
+        </button>
+      `;
+    }
+    html += `</div>`;
+    container.innerHTML = html;
+  }
+
+  // 計算未スタート時の場合は初期アクセントボタンスタイルを維持して完了（DOM破棄を防止！）
+  const isCalculated = simpleLaunchState.isCalculated && !!simpleLaunchState.enemyLandDate;
+  if (!isCalculated) {
+    for (let part = 1; part <= totalParts; part++) {
+      const btn = document.getElementById(`btn-alliance-part-${part}`);
+      if (!btn) continue;
+      const startIdx = (part - 1) * limitPerChunk;
+      const endIdx = Math.min(part * limitPerChunk, selectedCount);
+      const expectedClass = 'btn-game btn-sm btn-accent py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0 transition-all';
+      if (btn.className !== expectedClass) btn.className = expectedClass;
+      const innerContent = `
+        <span class="flex items-center gap-1 text-[11px] sm:text-xs">
+          <i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i> 📋 Part ${part}/${totalParts}
+        </span>
+        <span class="text-[10px] opacity-90 font-mono">(${startIdx + 1}〜${endIdx}人目)</span>
+      `;
+      if (btn.innerHTML.replace(/\s+/g, ' ') !== innerContent.replace(/\s+/g, ' ')) {
+        btn.innerHTML = innerContent;
+      }
+    }
+    return;
+  }
+
+  // 計算進行中の場合は、時間超過・コピー済ステータスを非破壊に差分更新
+  const enemyLandDate = simpleLaunchState.enemyLandDate;
   const memberWithDates = selectedMembers.map(m => {
     const targetLaunchDate = new Date(enemyLandDate.getTime() + getInsertionMarginMs() - m.marchSec * 1000);
     return {
@@ -4741,113 +4892,53 @@ function updateAllianceCopyButtons() {
     return items.every(item => nowTimeMs > item.launchTimeMs);
   };
 
-  const allExpired = memberWithDates.length > 0 && isChunkExpired(memberWithDates);
-  if (allExpired && copiedAlliancePartIds.size > 0) {
-    copiedAlliancePartIds.clear();
-  }
+  for (let part = 1; part <= totalParts; part++) {
+    const btn = document.getElementById(`btn-alliance-part-${part}`);
+    if (!btn) continue;
 
-  if (selectedCount <= limitPerChunk) {
-    const isCopied = copiedAlliancePartIds.has('single');
-    const isExpired = isChunkExpired(memberWithDates);
+    const startIdx = (part - 1) * limitPerChunk;
+    const endIdx = Math.min(part * limitPerChunk, selectedCount);
+    const chunkItems = memberWithDates.slice(startIdx, endIdx);
 
-    let btnClass = 'btn-game btn-sm w-full py-2.5 font-black text-xs sm:text-sm tracking-wide shadow flex items-center justify-center gap-1.5 whitespace-nowrap transition-all';
-    let btnContent = '';
+    const partKey = `part_${part}`;
+    const isCopied = copiedAlliancePartIds.has(partKey);
+    const isExpired = isChunkExpired(chunkItems);
+
+    let btnClass = 'btn-game btn-sm py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0 transition-all';
+    let btnLabel = `📋 Part ${part}/${totalParts}`;
+    let btnSub = `(${startIdx + 1}〜${endIdx}人目)`;
+    let icon = '<i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i>';
 
     if (isExpired) {
       btnClass += ' bg-rose-950/90 border-2 border-rose-500 text-rose-300 opacity-80 cursor-not-allowed';
-      btnContent = `<i class="fa-solid fa-circle-xmark text-rose-400"></i> <span>❌ 時間超過 (全メンバー発車済)</span>`;
+      btnLabel = `❌ Part ${part} 超過`;
+      icon = '<i class="fa-solid fa-circle-xmark text-rose-400 text-[10px]"></i>';
     } else if (isCopied) {
-      btnClass += ' bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.5)]';
-      btnContent = `<i class="fa-solid fa-check-double text-emerald-200"></i> <span>✓ 全員分の指示 コピー済 (${sortModeTitle})</span>`;
+      btnClass += ' bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
+      btnLabel = `✓ Part ${part} コピー済`;
+      icon = '<i class="fa-solid fa-check text-emerald-200 text-[10px]"></i>';
     } else {
-      btnClass += ' btn-primary';
-      btnContent = `<i class="fa-solid fa-copy text-yellow-300"></i> <span>📋 選択メンバー全員の指示をコピー (${sortModeTitle})</span>`;
+      btnClass += ' btn-accent';
     }
 
-    const existingBtn = container.querySelector('#btn-copy-alliance-multi-chat');
-    if (existingBtn && container.children.length === 1) {
-      if (existingBtn.className !== btnClass) existingBtn.className = btnClass;
-      if (existingBtn.innerHTML !== btnContent) existingBtn.innerHTML = btnContent;
-    } else {
-      container.innerHTML = `
-        <button id="btn-copy-alliance-multi-chat" class="${btnClass}" onclick="copyAllianceMultiChat(1, 0, 'single')">
-          ${btnContent}
-        </button>
-      `;
-    }
-  } else {
-    const totalParts = Math.ceil(selectedCount / limitPerChunk);
-    const grid = container.querySelector('.alliance-parts-grid');
-
-    if (!grid || grid.children.length !== totalParts) {
-      let html = `
-        <div class="text-[10px] text-yellow-300 font-bold bg-yellow-950/60 p-1.5 rounded border border-yellow-500/40 text-center truncate">
-          ⚠️ ホワサバ改行対策: ${selectedCount}名を 9名ずつ(全${totalParts}回) 分割送信
-        </div>
-        <div class="alliance-parts-grid grid grid-cols-${Math.min(totalParts, 2)} gap-1.5">
-      `;
-      for (let part = 1; part <= totalParts; part++) {
-        const startIdx = (part - 1) * limitPerChunk;
-        const endIdx = Math.min(part * limitPerChunk, selectedCount);
-        html += `
-          <button id="btn-alliance-part-${part}" class="btn-game btn-sm btn-accent py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0 transition-all" onclick="copyAllianceMultiChat(${part}, ${limitPerChunk}, 'part_${part}')">
-            <span class="flex items-center gap-1 text-[11px] sm:text-xs">
-              <i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i> 📋 Part ${part}/${totalParts}
-            </span>
-            <span class="text-[10px] opacity-90 font-mono">(${startIdx + 1}〜${endIdx}人目)</span>
-          </button>
-        `;
-      }
-      html += `</div>`;
-      container.innerHTML = html;
-    }
-
-    // Now cleanly update each button in-place without replacing DOM elements!
-    for (let part = 1; part <= totalParts; part++) {
-      const btn = document.getElementById(`btn-alliance-part-${part}`);
-      if (!btn) continue;
-
-      const startIdx = (part - 1) * limitPerChunk;
-      const endIdx = Math.min(part * limitPerChunk, selectedCount);
-      const chunkItems = memberWithDates.slice(startIdx, endIdx);
-
-      const partKey = `part_${part}`;
-      const isCopied = copiedAlliancePartIds.has(partKey);
-      const isExpired = isChunkExpired(chunkItems);
-
-      let btnClass = 'btn-game btn-sm py-2 px-1 font-black text-xs shadow flex flex-col items-center justify-center leading-tight whitespace-nowrap min-w-0 transition-all';
-      let btnLabel = `📋 Part ${part}/${totalParts}`;
-      let btnSub = `(${startIdx + 1}〜${endIdx}人目)`;
-      let icon = '<i class="fa-solid fa-copy text-yellow-300 text-[10px]"></i>';
-
-      if (isExpired) {
-        btnClass += ' bg-rose-950/90 border-2 border-rose-500 text-rose-300 opacity-80 cursor-not-allowed';
-        btnLabel = `❌ Part ${part} 超過`;
-        icon = '<i class="fa-solid fa-circle-xmark text-rose-400 text-[10px]"></i>';
-      } else if (isCopied) {
-        btnClass += ' bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
-        btnLabel = `✓ Part ${part} コピー済`;
-        icon = '<i class="fa-solid fa-check text-emerald-200 text-[10px]"></i>';
-      } else {
-        btnClass += ' btn-accent';
-      }
-
-      if (btn.className !== btnClass) btn.className = btnClass;
-      const innerContent = `
-        <span class="flex items-center gap-1 text-[11px] sm:text-xs">
-          ${icon} ${btnLabel}
-        </span>
-        <span class="text-[10px] opacity-90 font-mono">${btnSub}</span>
-      `;
-      if (btn.innerHTML.replace(/\s+/g, ' ') !== innerContent.replace(/\s+/g, ' ')) {
-        btn.innerHTML = innerContent;
-      }
+    if (btn.className !== btnClass) btn.className = btnClass;
+    const innerContent = `
+      <span class="flex items-center gap-1 text-[11px] sm:text-xs">
+        ${icon} ${btnLabel}
+      </span>
+      <span class="text-[10px] opacity-90 font-mono">${btnSub}</span>
+    `;
+    if (btn.innerHTML.replace(/\s+/g, ' ') !== innerContent.replace(/\s+/g, ' ')) {
+      btn.innerHTML = innerContent;
     }
   }
 }
 
 function copyAllianceMultiChat(part = 1, limitPerChunk = 0, partKey = 'single') {
   if (!simpleLaunchState.isCalculated || !simpleLaunchState.enemyLandDate) {
+    if (typeof showToast === 'function') {
+      showToast('⚠️ 【コピー不可】まず「🎯 差し込み計算スタート！」を押してください', 'warn', 3500);
+    }
     alert('⚠️ 【コピー不可】差し込み計算が開始されていないか、リセットされています。\nまず「🎯 差し込み計算スタート！」を押してスケジュールを生成してください。');
     return;
   }
@@ -5112,7 +5203,7 @@ let ocrSessionState = {
   manualRemSec: 30
 };
 
-// --- OCR Manual Direct Input & Correction Handlers (v1.06.14) ---
+// --- OCR Manual Direct Input & Correction Handlers (v1.06.26) ---
 function toggleOcrManualSection() {
   // If toggling on, activate manual mode exclusively
   if (!ocrSessionState.isManualSelected) {
@@ -6111,7 +6202,7 @@ window.readFromClipboardDirectly = async function() {
 };
 
 
-// --- Modern 5-Hub Main Tab Switcher (v1.06.14) ---
+// --- Modern 5-Hub Main Tab Switcher (v1.06.26) ---
 let currentActiveMainTab = 'single';
 
 function switchMainTab(tabName) {
@@ -6150,6 +6241,9 @@ function switchMainTab(tabName) {
 }
 
 function openOperationShareModal() {
+  if (typeof switchShareSubTab === 'function') {
+    switchShareSubTab('copy');
+  }
   updateOperationSharePreview();
   const modal = document.getElementById('operation-share-modal');
   if (modal) modal.classList.add('open');
@@ -6180,40 +6274,23 @@ function copyAllianceChatFromModal() {
   closeOperationShareModal();
 }
 
-// --- Unified Alliance Chat Generators (v1.06.14) ---
+// --- Unified Alliance Chat Generators (v1.06.26) ---
 function generateAllianceChatText() {
-  if (currentActiveMainTab === 'single' || (simpleLaunchState.isCalculated && simpleLaunchState.targetLaunchDate)) {
-    const launchTimeStr = simpleLaunchState.targetLaunchDate ? formatTimeHHMMSS(simpleLaunchState.targetLaunchDate) : '--:--:--';
-    const now = getAdjustedNowTime();
-    const diffSec = simpleLaunchState.targetLaunchDate ? Math.max(0, (simpleLaunchState.targetLaunchDate.getTime() - now.getTime()) / 1000) : 0;
-    const countdownStr = formatCountdownMMSSs(diffSec);
-    return buildAllianceChatText('simple', {
-      statusMode: simpleLaunchState.statusMode || 'rally',
-      launchTimeStr: launchTimeStr,
-      countdownStr: countdownStr
-    });
+  if (!simpleLaunchState.isCalculated || !simpleLaunchState.targetLaunchDate) {
+    return `⚔️【ホワサバ 差し込み発車指示】
+⚠️ 差し込み計算が開始されていないか、リセットされています。
+「個人」画面で「🎯 差し込み計算スタート！」を押すと、
+ここに最新の着弾・発車スケジュール指示文が自動生成されます。`;
   }
 
-  // Multi-march commander text
-  const e1 = state.marchList[0] || {};
-  const e2 = state.marchList[1] || {};
-  const e1Tag = e1.allianceTag ? `[${e1.allianceTag}] ` : '';
-  const e1Name = e1.governorName || '敵1';
-  const e2Tag = e2.allianceTag ? `[${e2.allianceTag}] ` : '';
-  const e2Name = e2.governorName || '敵2';
-
-  const e1Land = document.getElementById('res-enemy1-land')?.textContent || '--:--:--';
-  const e2Land = document.getElementById('res-enemy2-land')?.textContent || '--:--:--';
-  const launchMin = document.getElementById('res-launch-min')?.textContent || '--:--:--';
-  const launchMid = document.getElementById('res-launch-mid')?.textContent || '--:--:--';
-  const launchMax = document.getElementById('res-launch-max')?.textContent || '--:--:--';
-  const windowSpan = document.getElementById('res-window-span')?.textContent || '0.0秒';
-  const countdown = document.getElementById('launch-countdown')?.textContent || '00:00.0';
-
-  return buildAllianceChatText('multi', {
-    e1Tag, e1Name, e1Land,
-    e2Tag, e2Name, e2Land,
-    launchMin, launchMid, launchMax, windowSpan, countdown
+  const launchTimeStr = formatTimeHHMMSS(simpleLaunchState.targetLaunchDate);
+  const now = getAdjustedNowTime();
+  const diffSec = Math.max(0, (simpleLaunchState.targetLaunchDate.getTime() - now.getTime()) / 1000);
+  const countdownStr = formatCountdownMMSSs(diffSec);
+  return buildAllianceChatText('simple', {
+    statusMode: simpleLaunchState.statusMode || 'rally',
+    launchTimeStr: launchTimeStr,
+    countdownStr: countdownStr
   });
 }
 
@@ -6227,7 +6304,7 @@ function copyAllianceChat() {
 }
 
 
-// --- Dedicated Clock Adjustment Modal Helpers (v1.06.14) ---
+// --- Dedicated Clock Adjustment Modal Helpers (v1.06.26) ---
 function openClockAdjustModal() {
   const modal = document.getElementById('clock-adjust-modal');
   if (modal) modal.classList.add('open');
@@ -6239,7 +6316,7 @@ function closeClockAdjustModal() {
 }
 
 
-// --- Remaining Time Quick Adjust Modal Helpers (v1.06.14) ---
+// --- Remaining Time Quick Adjust Modal Helpers (v1.06.26) ---
 function openRemTimeAdjustModal() {
   updateModalRemTimeDisplay();
   const modal = document.getElementById('rem-time-adjust-modal');
@@ -6268,7 +6345,7 @@ function setSimpleRemainingMinute(mins) {
   const newTotalSec = (mins * 60) + currentSecs;
   elem.value = formatCountdownMMSS(newTotalSec);
   if (simpleLaunchState.isCalculated && typeof recalculateSimpleLaunchStateOnMarchChange === 'function') {
-    recalculateSimpleLaunchStateOnMarchChange();
+    recalculateSimpleLaunchStateOnMarchChange(false, newTotalSec);
   }
 }
 
@@ -6279,7 +6356,7 @@ function setSimpleRemainingSecond(secs) {
   const newTotalSec = (currentMins * 60) + secs;
   elem.value = formatCountdownMMSS(newTotalSec);
   if (simpleLaunchState.isCalculated && typeof recalculateSimpleLaunchStateOnMarchChange === 'function') {
-    recalculateSimpleLaunchStateOnMarchChange();
+    recalculateSimpleLaunchStateOnMarchChange(false, newTotalSec);
   }
 }
 
@@ -6290,7 +6367,7 @@ function adjustSimpleRemainingTime(delta) {
   const newTotalSec = Math.max(0, Math.round((currentSec + delta) * 10) / 10);
   elem.value = formatCountdownMMSS(newTotalSec);
   if (simpleLaunchState.isCalculated && typeof recalculateSimpleLaunchStateOnMarchChange === 'function') {
-    recalculateSimpleLaunchStateOnMarchChange();
+    recalculateSimpleLaunchStateOnMarchChange(false, newTotalSec);
   }
 }
 
@@ -6310,7 +6387,7 @@ function adjustSimpleRemainingTimeInModal(delta) {
 }
 
 
-// --- Comprehensive Help Guide Modal Helpers (v1.06.14) ---
+// --- Comprehensive Help Guide Modal Helpers (v1.06.26) ---
 function openHelpGuideModal() {
   const modal = document.getElementById('help-guide-modal');
   if (modal) modal.classList.add('open');
@@ -6322,7 +6399,7 @@ function closeHelpGuideModal() {
 }
 
 
-// --- Operation Share Modal Sub-Tabs (v1.06.14 Plan A) ---
+// --- Operation Share Modal Sub-Tabs (v1.06.26 Plan A) ---
 let currentShareSubTab = 'copy';
 
 function switchShareSubTab(tabName) {
@@ -6351,7 +6428,7 @@ function switchShareSubTab(tabName) {
 }
 
 
-// --- Global Data Backup & Restore Engine (v1.06.14) ---
+// --- Global Data Backup & Restore Engine (v1.06.26) ---
 function exportAllAppDataJSON() {
   try {
     const backupData = {
@@ -6445,3 +6522,269 @@ function handleImportAppDataFile(event) {
   };
   reader.readAsText(file);
 }
+
+
+// ==========================================================================
+// 🔰 Interactive Onboarding Tour Engine (v1.06.26 - Yan-chan 3-Step Experience)
+// ==========================================================================
+let onboardingTourState = {
+  active: false,
+  currentStep: 1, // 1: Input, 2: Start, 3: Result
+  savedValues: null
+};
+
+function checkAndTriggerOnboarding() {
+  const isDone = localStorage.getItem('wos_onboarding_completed');
+  if (!isDone) {
+    setTimeout(() => {
+      startOnboardingTour(false);
+    }, 400);
+  }
+}
+window.checkAndTriggerOnboarding = checkAndTriggerOnboarding;
+
+function startOnboardingTour(forceRestart = false) {
+  // Switch to single calculation tab first
+  if (typeof switchTab === 'function') {
+    switchTab('single');
+  }
+
+  // Backup current inputs so we don't destroy user's existing work if forceRestarting
+  const myInput = document.getElementById('simple-my-march');
+  const enemyInput = document.getElementById('simple-enemy-march');
+  const remInput = document.getElementById('simple-remaining-time');
+  onboardingTourState.savedValues = {
+    my: myInput?.value || '00:05',
+    enemy: enemyInput?.value || '00:10',
+    rem: remInput?.value || '00:15'
+  };
+
+  // Preset ultra-fast test values: 5s / 10s / 15s (Zero wait time)
+  if (myInput) myInput.value = '00:05';
+  if (enemyInput) enemyInput.value = '00:10';
+  if (remInput) remInput.value = '00:15';
+
+  onboardingTourState.active = true;
+  onboardingTourState.currentStep = 1;
+
+  const overlay = document.getElementById('onboarding-overlay');
+  if (overlay) {
+    overlay.classList.remove('hidden');
+    overlay.classList.add('active');
+  }
+
+  renderOnboardingStep();
+}
+window.startOnboardingTour = startOnboardingTour;
+
+function clearOnboardingHighlights() {
+  document.querySelectorAll('.onboarding-highlight').forEach(el => {
+    el.classList.remove('onboarding-highlight');
+  });
+  const hole = document.getElementById('onboarding-hole-rect');
+  if (hole) {
+    hole.setAttribute('x', '0');
+    hole.setAttribute('y', '0');
+    hole.setAttribute('width', '0');
+    hole.setAttribute('height', '0');
+  }
+  const border = document.getElementById('onboarding-spotlight-border');
+  if (border) border.style.display = 'none';
+}
+
+function updateSvgCutoutSpotlight(targetEl) {
+  const hole = document.getElementById('onboarding-hole-rect');
+  const border = document.getElementById('onboarding-spotlight-border');
+  if (!targetEl || !hole) return;
+
+  const rect = targetEl.getBoundingClientRect();
+  const pad = 6;
+  const x = Math.max(0, rect.left - pad);
+  const y = Math.max(0, rect.top - pad);
+  const w = rect.width + pad * 2;
+  const h = rect.height + pad * 2;
+
+  // Cut out perfectly clear hole in the SVG mask
+  hole.setAttribute('x', x);
+  hole.setAttribute('y', y);
+  hole.setAttribute('width', w);
+  hole.setAttribute('height', h);
+  hole.setAttribute('rx', '14');
+
+  // Place glowing spotlight border precisely over the cutout hole
+  if (border) {
+    border.style.display = 'block';
+    border.style.left = x + 'px';
+    border.style.top = y + 'px';
+    border.style.width = w + 'px';
+    border.style.height = h + 'px';
+  }
+}
+
+function renderOnboardingStep() {
+  clearOnboardingHighlights();
+
+  const step = onboardingTourState.currentStep;
+  const badge = document.getElementById('onboarding-step-badge');
+  const title = document.getElementById('onboarding-title');
+  const desc = document.getElementById('onboarding-desc');
+  const actionBtn = document.getElementById('btn-onboarding-action');
+
+  let target = null;
+
+  if (step === 1) {
+    // Step 1: Input Experience
+    if (badge) badge.textContent = 'STEP 1/3';
+    if (title) title.textContent = '① 自分と相手の時間をセット！';
+    if (desc) desc.innerHTML = 'まずは行軍時間と、相手の残り時間をセット！✨<br><span class="text-amber-300 font-bold">（すぐに試せるサンプル値をセットしたよ！）</span>';
+    if (actionBtn) {
+      actionBtn.innerHTML = '<span>次へ（計算してみる） ▶</span>';
+      actionBtn.className = 'btn-game btn-sm bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-slate-950 font-black px-4 py-2 text-xs rounded-xl shadow-lg flex items-center gap-1';
+    }
+
+    target = document.getElementById('simple-input-block') || document.getElementById('simple-remaining-time');
+  } else if (step === 2) {
+    // Step 2: Trigger Action
+    if (badge) badge.textContent = 'STEP 2/3';
+    if (title) title.textContent = '② このボタンを押すだけ！';
+    if (desc) desc.innerHTML = '準備ができたら<span class="text-yellow-300 font-bold">「差し込み計算スタート」</span>をタップ！🎯<br><span class="text-cyan-300">瞬時にベストな発車予定時刻を割り出します！</span>';
+    if (actionBtn) {
+      actionBtn.innerHTML = '<span>🎯 計算スタートを体験！</span>';
+      actionBtn.className = 'btn-game btn-sm bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 text-slate-950 font-black px-4 py-2 text-xs rounded-xl shadow-lg flex items-center gap-1 animate-pulse';
+    }
+
+    target = document.getElementById('btn-simple-enemy-start');
+  } else if (step === 3) {
+    // Step 3: Result & Value
+    if (badge) badge.textContent = 'STEP 3/3';
+    if (title) title.textContent = '③ ここに出発時刻が出ます！';
+    if (desc) desc.innerHTML = '発車予定時刻が出たよ！🚀<br><span class="text-yellow-300 font-bold">カウントダウンが0になった瞬間に発車</span>すれば、ミリ秒単位で差し込み成功！';
+    if (actionBtn) {
+      actionBtn.innerHTML = '<span>完了して使う！🎉</span>';
+      actionBtn.className = 'btn-game btn-sm bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 text-slate-950 font-black px-5 py-2 text-xs rounded-xl shadow-lg flex items-center gap-1';
+    }
+
+    // Target the entire result panel so user sees land-time and countdown clearly
+    target = document.getElementById('simple-result-box') || document.getElementById('simple-launch-time-hero');
+  }
+
+  const card = document.getElementById('onboarding-dialog-card');
+  if (card) {
+    if (step === 3) {
+      // In Step 3, result panel is large in the lower half; place dialog cleanly at top (below header clock)
+      card.classList.remove('pos-bottom');
+      card.classList.add('pos-top');
+    } else {
+      // In Steps 1 & 2, targets are in the upper half; place dialog cleanly at bottom (above footer)
+      card.classList.remove('pos-top');
+      card.classList.add('pos-bottom');
+    }
+  }
+
+  if (target) {
+    target.classList.add('onboarding-highlight');
+    if (step === 3) {
+      // For Step 3, scroll result box smoothly to center/bottom so top dialog card does not collide
+      target.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    } else {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    setTimeout(() => {
+      updateSvgCutoutSpotlight(target);
+    }, 150);
+  }
+}
+
+// Window resize / scroll listener to keep spotlight hole in sync with target
+window.addEventListener('resize', () => {
+  if (onboardingTourState.active) {
+    const step = onboardingTourState.currentStep;
+    let target = null;
+    if (step === 1) target = document.getElementById('simple-input-block');
+    if (step === 2) target = document.getElementById('btn-simple-enemy-start');
+    if (step === 3) target = document.getElementById('simple-launch-time-hero') || document.getElementById('simple-result-box');
+    if (target) updateSvgCutoutSpotlight(target);
+  }
+});
+window.addEventListener('scroll', () => {
+  if (onboardingTourState.active) {
+    const step = onboardingTourState.currentStep;
+    let target = null;
+    if (step === 1) target = document.getElementById('simple-input-block');
+    if (step === 2) target = document.getElementById('btn-simple-enemy-start');
+    if (step === 3) target = document.getElementById('simple-result-box');
+    if (target) updateSvgCutoutSpotlight(target);
+  }
+}, { passive: true });
+
+function handleOnboardingNext() {
+  if (!onboardingTourState.active) return;
+
+  if (onboardingTourState.currentStep === 1) {
+    onboardingTourState.currentStep = 2;
+    renderOnboardingStep();
+  } else if (onboardingTourState.currentStep === 2) {
+    // Experience actual calculation launch!
+    triggerSimpleEnemyLaunch();
+    onboardingTourState.currentStep = 3;
+    renderOnboardingStep();
+  } else if (onboardingTourState.currentStep === 3) {
+    finishOnboardingTour();
+  }
+}
+window.handleOnboardingNext = handleOnboardingNext;
+
+function finishOnboardingTour() {
+  localStorage.setItem('wos_onboarding_completed', 'true');
+  clearOnboardingHighlights();
+  onboardingTourState.active = false;
+  const cardEl = document.getElementById('onboarding-dialog-card');
+  if (cardEl) {
+    cardEl.classList.remove('pos-top');
+    cardEl.classList.add('pos-bottom');
+  }
+
+  const overlay = document.getElementById('onboarding-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    setTimeout(() => overlay.classList.add('hidden'), 300);
+  }
+
+  showToast('🎉 やんちゃんツアー完了！自由に使ってみてね！', 'success', 2500);
+}
+window.finishOnboardingTour = finishOnboardingTour;
+
+function skipOnboardingTour() {
+  localStorage.setItem('wos_onboarding_completed', 'true');
+  clearOnboardingHighlights();
+  onboardingTourState.active = false;
+
+  const overlay = document.getElementById('onboarding-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    setTimeout(() => overlay.classList.add('hidden'), 300);
+  }
+
+  // Restore previous values if needed
+  if (onboardingTourState.savedValues) {
+    const myInput = document.getElementById('simple-my-march');
+    const enemyInput = document.getElementById('simple-enemy-march');
+    const remInput = document.getElementById('simple-remaining-time');
+    if (myInput) myInput.value = onboardingTourState.savedValues.my;
+    if (enemyInput) enemyInput.value = onboardingTourState.savedValues.enemy;
+    if (remInput) remInput.value = onboardingTourState.savedValues.rem;
+  }
+}
+window.skipOnboardingTour = skipOnboardingTour;
+
+// 🧪 Debug Tool: Reset Onboarding Flag to test pristine first launch
+function resetOnboardingFlagForDebug() {
+  localStorage.removeItem('wos_onboarding_completed');
+  showToast('🔄 初回フラグを解除しました！ページをリロードすると初回ツアーが起動します', 'info', 3000);
+  setTimeout(() => {
+    if (confirm('初回起動ツアーのデバッグのため、今すぐページをリロードしますか？')) {
+      location.reload();
+    }
+  }, 350);
+}
+window.resetOnboardingFlagForDebug = resetOnboardingFlagForDebug;
