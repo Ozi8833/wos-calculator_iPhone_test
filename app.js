@@ -1,5 +1,5 @@
 
-// --- Security: HTML Injection / XSS Protection Helper (v1.06.12) ---
+// --- Security: HTML Injection / XSS Protection Helper (v1.06.14) ---
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -623,7 +623,7 @@ function playBeep(freq = 880, type = 'sine', duration = 0.15) {
 }
 
 
-// --- Screen Wake Lock Manager (v1.06.12) ---
+// --- Screen Wake Lock Manager (v1.06.14) ---
 let wakeLockInstance = null;
 
 async function requestScreenWakeLock() {
@@ -659,7 +659,7 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 
-// --- Toast / Snackbar Notification Helper (v1.06.12) ---
+// --- Toast / Snackbar Notification Helper (v1.06.14) ---
 function showToast(message, type = 'success', duration = 2200) {
   let container = document.getElementById('toast-container');
   if (!container) {
@@ -693,7 +693,7 @@ function showToast(message, type = 'success', duration = 2200) {
   }, duration);
 }
 
-// --- Vibration Feedback Helper (v1.06.12) ---
+// --- Vibration Feedback Helper (v1.06.14) ---
 function triggerVibration(pattern) {
   try {
     if ('vibrate' in navigator && isSimpleVibrationEnabled) {
@@ -2411,7 +2411,7 @@ function loadAppSettings() {
 
 // Button Design Theme Management (Neon / Emerald / Gold)
 
-// --- Insertion Margin Offset Engine (v1.06.12: +0.1s / +0.3s / +0.5s) ---
+// --- Insertion Margin Offset Engine (v1.06.14: +0.1s / +0.3s / +0.5s) ---
 function getInsertionMarginMs() {
   if (state.settings && typeof state.settings.insertionMarginMs === 'number') {
     return state.settings.insertionMarginMs;
@@ -2641,7 +2641,7 @@ function updateAllToggleButtonsUI() {
 
 // v1.03.09 Audio Mute Control for Simple Mode
 
-// v1.06.12 Vibration ON/OFF Control
+// v1.06.14 Vibration ON/OFF Control
 
 // Handlers for Audio Alert & Vibration settings checkboxes
 function handleSettingAudioChange(enabled) {
@@ -4284,7 +4284,7 @@ let keypadInputBuffer = ''; // Stores typed raw digits like "25" (25s) or "130" 
 
 
 
-// --- March Time Keypad Preset & Recent History Engine (v1.06.12) ---
+// --- March Time Keypad Preset & Recent History Engine (v1.06.14) ---
 let keypadRecentHistory = [15, 20, 25, 30]; // Sensible default initial history!
 try {
   const savedHistory = localStorage.getItem('wos_keypad_recent_history');
@@ -5112,7 +5112,7 @@ let ocrSessionState = {
   manualRemSec: 30
 };
 
-// --- OCR Manual Direct Input & Correction Handlers (v1.06.12) ---
+// --- OCR Manual Direct Input & Correction Handlers (v1.06.14) ---
 function toggleOcrManualSection() {
   // If toggling on, activate manual mode exclusively
   if (!ocrSessionState.isManualSelected) {
@@ -5448,6 +5448,11 @@ function openOcrPreviewModal() {
   const modal = document.getElementById('ocr-preview-modal');
   if (modal) modal.classList.add('open');
 
+  // Reset manual state on modal open
+  ocrSessionState.isManualSelected = false;
+  ocrSessionState.selectedTargetIdx = 0;
+  updateOcrManualUI();
+
   const captureTimeInput = document.getElementById('ocr-capture-time-input');
   if (captureTimeInput && ocrSessionState.captureTime) {
     captureTimeInput.value = formatTimeHHMMSS(ocrSessionState.captureTime);
@@ -5467,6 +5472,11 @@ function closeOcrPreviewModal() {
     clearInterval(ocrSessionState.lagTimerInterval);
     ocrSessionState.lagTimerInterval = null;
   }
+
+  // Reset manual state and hide manual card on modal close
+  ocrSessionState.isManualSelected = false;
+  ocrSessionState.selectedTargetIdx = 0;
+  updateOcrManualUI();
 }
 
 function startOcrLagTimer() {
@@ -5532,8 +5542,8 @@ function preprocessImageCanvas(imageElement) {
   const nw = imageElement.naturalWidth || imageElement.width || 500;
   const nh = imageElement.naturalHeight || imageElement.height || 1000;
 
-  const cropLeft = nw * 0.58;
-  const cropW = nw * 0.42;
+  const cropLeft = nw * 0.45;
+  const cropW = nw * 0.55;
   const cropH = nh;
 
   canvas.width = cropW * scale;
@@ -5752,6 +5762,7 @@ function parseOcrExtractedLines(ocrLines, sourceImageElement, canvasScale) {
 }
 function renderOcrResultsView() {
   ocrSessionState.isManualSelected = (!ocrSessionState.detectedMarches || ocrSessionState.detectedMarches.length === 0);
+  updateOcrManualUI();
   const loadingView = document.getElementById('ocr-loading-view');
   const resultsView = document.getElementById('ocr-results-view');
   if (loadingView) loadingView.classList.add('hidden');
@@ -6100,7 +6111,7 @@ window.readFromClipboardDirectly = async function() {
 };
 
 
-// --- Modern 5-Hub Main Tab Switcher (v1.06.12) ---
+// --- Modern 5-Hub Main Tab Switcher (v1.06.14) ---
 let currentActiveMainTab = 'single';
 
 function switchMainTab(tabName) {
@@ -6169,7 +6180,7 @@ function copyAllianceChatFromModal() {
   closeOperationShareModal();
 }
 
-// --- Unified Alliance Chat Generators (v1.06.12) ---
+// --- Unified Alliance Chat Generators (v1.06.14) ---
 function generateAllianceChatText() {
   if (currentActiveMainTab === 'single' || (simpleLaunchState.isCalculated && simpleLaunchState.targetLaunchDate)) {
     const launchTimeStr = simpleLaunchState.targetLaunchDate ? formatTimeHHMMSS(simpleLaunchState.targetLaunchDate) : '--:--:--';
@@ -6216,7 +6227,7 @@ function copyAllianceChat() {
 }
 
 
-// --- Dedicated Clock Adjustment Modal Helpers (v1.06.12) ---
+// --- Dedicated Clock Adjustment Modal Helpers (v1.06.14) ---
 function openClockAdjustModal() {
   const modal = document.getElementById('clock-adjust-modal');
   if (modal) modal.classList.add('open');
@@ -6228,7 +6239,7 @@ function closeClockAdjustModal() {
 }
 
 
-// --- Remaining Time Quick Adjust Modal Helpers (v1.06.12) ---
+// --- Remaining Time Quick Adjust Modal Helpers (v1.06.14) ---
 function openRemTimeAdjustModal() {
   updateModalRemTimeDisplay();
   const modal = document.getElementById('rem-time-adjust-modal');
@@ -6299,7 +6310,7 @@ function adjustSimpleRemainingTimeInModal(delta) {
 }
 
 
-// --- Comprehensive Help Guide Modal Helpers (v1.06.12) ---
+// --- Comprehensive Help Guide Modal Helpers (v1.06.14) ---
 function openHelpGuideModal() {
   const modal = document.getElementById('help-guide-modal');
   if (modal) modal.classList.add('open');
@@ -6311,7 +6322,7 @@ function closeHelpGuideModal() {
 }
 
 
-// --- Operation Share Modal Sub-Tabs (v1.06.12 Plan A) ---
+// --- Operation Share Modal Sub-Tabs (v1.06.14 Plan A) ---
 let currentShareSubTab = 'copy';
 
 function switchShareSubTab(tabName) {
@@ -6340,7 +6351,7 @@ function switchShareSubTab(tabName) {
 }
 
 
-// --- Global Data Backup & Restore Engine (v1.06.12) ---
+// --- Global Data Backup & Restore Engine (v1.06.14) ---
 function exportAllAppDataJSON() {
   try {
     const backupData = {
