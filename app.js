@@ -1,5 +1,5 @@
 
-// --- Security: HTML Injection / XSS Protection Helper (v1.06.26) ---
+// --- Security: HTML Injection / XSS Protection Helper (v1.06.43) ---
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -211,7 +211,14 @@ function deletePresetFromModal(event, presetIdx) {
 function loadEnemyPresets() {
   const saved = localStorage.getItem('wos_enemy_presets');
   if (saved) {
-    try { state.enemyPresets = JSON.parse(saved); } catch (e) {}
+    try {
+      const parsed = JSON.parse(saved);
+      state.enemyPresets = Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      state.enemyPresets = [];
+    }
+  } else {
+    state.enemyPresets = [];
   }
   const savedNote = localStorage.getItem('wos_strategy_note');
   if (savedNote) state.strategyNote = savedNote;
@@ -302,13 +309,13 @@ function renderMarchCards() {
         <div class="input-group">
           <label>同盟タグ</label>
           <input type="text" class="game-input alliance-input text-transform-uppercase" 
-                 value="${march.allianceTag}" placeholder="ABC" 
+                 value="${escapeHtml(march.allianceTag || '')}" placeholder="ABC" 
                  oninput="this.value = this.value.toUpperCase(); updateMarchData(${march.id}, 'allianceTag', this.value)">
         </div>
         <div class="input-group">
           <label>領主名</label>
           <input type="text" class="game-input gov-input" 
-                 value="${march.governorName}" placeholder="PlayerName"
+                 value="${escapeHtml(march.governorName || '')}" placeholder="PlayerName"
                  oninput="updateMarchData(${march.id}, 'governorName', this.value)">
         </div>
       </div>
@@ -378,6 +385,14 @@ function renderMarchCards() {
   }
 
   attachFocusAutoEndCursor();
+}
+
+
+function updateMarchData(id, field, value) {
+  const march = state.marchList.find(m => m.id === id);
+  if (!march) return;
+  march[field] = value;
+  calculateInsertion();
 }
 
 function getProjectedLandDate(march) {
@@ -623,7 +638,7 @@ function playBeep(freq = 880, type = 'sine', duration = 0.15) {
 }
 
 
-// --- Screen Wake Lock Manager (v1.06.26) ---
+// --- Screen Wake Lock Manager (v1.06.43) ---
 let wakeLockInstance = null;
 
 async function requestScreenWakeLock() {
@@ -651,15 +666,24 @@ async function releaseScreenWakeLock() {
 }
 
 // Re-acquire wake lock on visibility change (when user returns to app)
+// Helper to check if any timer is actively running across single or multi modes (v1.06.44)
+function isAnyTimerActive() {
+  if (simpleLaunchState && simpleLaunchState.isCalculated) return true;
+  if (Array.isArray(state.marchList) && state.marchList.some(m => m.isRunning)) return true;
+  if (typeof isAllianceCalculationActive === 'function' && isAllianceCalculationActive()) return true;
+  return false;
+}
+
+// Re-acquire wake lock on visibility change (when user returns to app)
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
-    if (simpleLaunchState.isRunning) {
+    if (isAnyTimerActive()) {
       await requestScreenWakeLock();
     }
   }
 });
 
-// --- Toast / Snackbar Notification Helper (v1.06.26) ---
+// --- Toast / Snackbar Notification Helper (v1.06.43) ---
 function showToast(message, type = 'success', duration = 2200) {
   let container = document.getElementById('toast-container');
   if (!container) {
@@ -681,7 +705,12 @@ function showToast(message, type = 'success', duration = 2200) {
   toast.className = `toast-item toast-${type} show`;
   toast.style.opacity = '1';
   toast.style.transform = 'translateY(0) scale(1)';
-  toast.innerHTML = `${iconHtml} <span>${message}</span>`;
+  const iconSpan = document.createElement('span');
+  iconSpan.innerHTML = iconHtml;
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = message;
+  toast.appendChild(iconSpan);
+  toast.appendChild(msgSpan);
   container.appendChild(toast);
 
   setTimeout(() => {
@@ -693,7 +722,7 @@ function showToast(message, type = 'success', duration = 2200) {
   }, duration);
 }
 
-// --- Vibration Feedback Helper (v1.06.26) ---
+// --- Vibration Feedback Helper (v1.06.43) ---
 function triggerVibration(pattern) {
   try {
     if ('vibrate' in navigator && isSimpleVibrationEnabled) {
@@ -896,7 +925,14 @@ function saveEnemyHistory(tag, name) {
 function loadEnemyHistory() {
   const saved = localStorage.getItem('wos_enemy_history');
   if (saved) {
-    try { state.history = JSON.parse(saved); } catch (e) {}
+    try {
+      const parsed = JSON.parse(saved);
+      state.history = Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      state.history = [];
+    }
+  } else {
+    state.history = [];
   }
 }
 
@@ -915,8 +951,8 @@ function renderHistoryList() {
     div.className = 'flex justify-between items-center bg-black/40 p-2 rounded border border-cyan-900/40 text-xs cursor-pointer hover:border-cyan-400';
     div.innerHTML = `
       <div>
-        <span class="font-bold text-yellow-400">[${item.tag || '??? '}]</span>
-        <span class="text-gray-200 ml-1">${item.name || '不明'}</span>
+        <span class="font-bold text-yellow-400">[${escapeHtml(item.tag || '??? ')}]</span>
+        <span class="text-gray-200 ml-1">${escapeHtml(item.name || '不明')}</span>
       </div>
       <button class="btn-game btn-xs btn-primary">適用</button>
     `;
@@ -1125,7 +1161,7 @@ function calculateInsertion() {
   // Set Main Countdown Text & Status Bar State (Clean Unified Architecture)
   if (!isGapStarted) {
     // 1. UNSTARTED WAITING STATE: Both marches have not been started yet
-    const staticMinCountdownSec = (enemy1.march.remainingRallySec + enemy1.march.marchTimeSec + 0.3) - myMarchSec;
+    const staticMinCountdownSec = (enemy1.march.remainingRallySec + enemy1.march.marchTimeSec + (getInsertionMarginMs() / 1000)) - myMarchSec;
     const staticCountdownStr = formatCountdownMMSSs(Math.max(0, staticMinCountdownSec));
     safeSetText(countdownElem, staticCountdownStr);
     safeSetText(miniTimerElem, staticCountdownStr);
@@ -1272,9 +1308,9 @@ function setMode(modeName) {
 // --- Global Clock Loop ---
 function startClockLoop() {
   setInterval(() => {
+    const now = getAdjustedNowTime();
     // Update live clock display
     try {
-      const now = getAdjustedNowTime();
       const timeStr = formatTimeHHMMSSs(now);
       const clockElem = document.getElementById('live-clock');
       if (clockElem) clockElem.textContent = timeStr;
@@ -1290,19 +1326,24 @@ function startClockLoop() {
       console.error('Clock display error:', e);
     }
 
-    // Update active timers if live mode is counting down
+    // Update active timers if live mode is counting down (チャッピー指摘対応: タイムスタンプ基準によるタイマー狂い・ズレ完全根絶)
     if (state.mode === 'live') {
       let cardStateChanged = false;
+      const refNowMs = now.getTime();
       state.marchList.forEach(m => {
         if (m.isRunning) {
-          if (m.remainingRallySec > 0) {
-            m.remainingRallySec = Math.max(0, Math.round((m.remainingRallySec - 0.1) * 10) / 10);
+          if (m.startTimestamp && m.initialRallySec !== undefined) {
+            const elapsedSec = (refNowMs - m.startTimestamp) / 1000;
+            const remaining = Math.max(0, m.initialRallySec - elapsedSec);
+            m.remainingRallySec = Math.round(remaining * 10) / 10;
             if (m.remainingRallySec <= 0) {
               m.remainingRallySec = 0;
               m.isRunning = false;
               cardStateChanged = true;
             }
           } else {
+            // チャッピー指摘対応: startTimestampが欠落した不正Running状態はドリフト減算せず安全停止
+            console.warn(`[Safety Stop] March #${m.id} missing startTimestamp in running state`);
             m.isRunning = false;
             cardStateChanged = true;
           }
@@ -1344,7 +1385,7 @@ function buildAllianceChatText(mode, data) {
 🎯 モード：${statusModeName}
 ⏰ 自分の発車予定時刻：${data.launchTimeStr} (${tzStr})
 🚀 発車まであと：${data.countdownStr}
-※相手着弾直後 (0.3秒後) に合わせた自動計算指示です。`;
+※相手着弾直後 (+${(getInsertionMarginMs() / 1000).toFixed(1)}秒後) に合わせた自動計算指示です。`;
   }
 
   // Default multi-march format
@@ -2205,27 +2246,29 @@ function renderCalcHistory() {
     div.className = 'calc-history-item';
     div.innerHTML = `
       <div class="flex justify-between items-center">
-        <span class="text-gray-300 font-mono">${item.expr} = <strong class="text-cyan-300">${item.result}</strong></span>
+        <span class="text-gray-300 font-mono">${escapeHtml(item.expr || '')} = <strong class="text-cyan-300">${escapeHtml(item.result || '')}</strong></span>
         <div class="flex gap-1">
-          <button class="btn-game btn-xs btn-secondary text-[11px] px-1.5 py-0.5" onclick="useHistoryResult('${item.result}')">再利用</button>
-          <button class="btn-game btn-xs bg-cyan-950 border border-cyan-500/50 text-cyan-300 text-[10px] px-1 py-0.5" onclick="transferHistoryToSimple('${item.result}')">反映</button>
+          <button class="btn-game btn-xs btn-secondary text-[11px] px-1.5 py-0.5" onclick="useHistoryResult('${encodeURIComponent(item.result || '')}')">再利用</button>
+          <button class="btn-game btn-xs bg-cyan-950 border border-cyan-500/50 text-cyan-300 text-[10px] px-1 py-0.5" onclick="transferHistoryToSimple('${encodeURIComponent(item.result || '')}')">反映</button>
         </div>
       </div>
       <input type="text" class="game-input text-xs" style="height:26px;" placeholder="メモを入力... (例: 砦差し込み用)" 
-             value="${item.note || ''}" onchange="updateCalcHistoryNote(${item.id}, this.value)">
+             value="${escapeHtml(item.note || '')}" onchange="updateCalcHistoryNote('${encodeURIComponent(item.id)}', this.value)">
     `;
     container.appendChild(div);
   });
 }
 
 function transferHistoryToSimple(resStr) {
+  resStr = decodeURIComponent(resStr || "");
   const sec = parseFlexibleInputToSeconds(resStr);
   calcActiveResultSec = sec;
   transferCalcResultToSimple('my');
 }
 
 function updateCalcHistoryNote(id, noteVal) {
-  const item = calcHistory.find(i => i.id === id);
+  const targetIdStr = String(id || "");
+  const item = calcHistory.find(i => String(i.id) === targetIdStr);
   if (item) {
     item.note = noteVal;
     persistCalcHistory();
@@ -2233,6 +2276,7 @@ function updateCalcHistoryNote(id, noteVal) {
 }
 
 function useHistoryResult(res) {
+  res = decodeURIComponent(res || "");
   state.calc.expression += res;
   updateCalcDisplay();
 }
@@ -2411,7 +2455,7 @@ function loadAppSettings() {
 
 // Button Design Theme Management (Neon / Emerald / Gold)
 
-// --- Insertion Margin Offset Engine (v1.06.26: +0.1s / +0.3s / +0.5s) ---
+// --- Insertion Margin Offset Engine (v1.06.43: +0.1s / +0.3s / +0.5s) ---
 function getInsertionMarginMs() {
   if (state.settings && typeof state.settings.insertionMarginMs === 'number') {
     return state.settings.insertionMarginMs;
@@ -2641,7 +2685,7 @@ function updateAllToggleButtonsUI() {
 
 // v1.03.09 Audio Mute Control for Simple Mode
 
-// v1.06.26 Vibration ON/OFF Control
+// v1.06.43 Vibration ON/OFF Control
 
 // Handlers for Audio Alert & Vibration settings checkboxes
 function handleSettingAudioChange(enabled) {
@@ -2780,15 +2824,17 @@ function initApp() {
   document.addEventListener('touchstart', unlockAudioOnTouch, { passive: true });
   document.addEventListener('pointerdown', unlockAudioOnTouch, { passive: true });
 
-  // Tap to start splash handler (Button & Overlay)
+  // Tap to start splash handler with strict one-shot guard (チャッピー指摘対応: 多重イベント・タイマー多重予約の完全防止)
+  let splashDismissed = false;
   const hideSplash = () => {
+    if (splashDismissed) return;
+    splashDismissed = true;
     initAudio();
     const splash = document.getElementById('splash-screen');
     if (splash) {
       splash.classList.add('hidden');
       setTimeout(() => splash.style.display = 'none', 600);
     }
-    // v1.06.26: スプラッシュ消去後に初回オンボーディングツアーを自動判定＆起動
     setTimeout(() => {
       if (typeof checkAndTriggerOnboarding === 'function') {
         checkAndTriggerOnboarding();
@@ -2889,11 +2935,13 @@ function initApp() {
   document.getElementById('btn-open-history')?.addEventListener('click', openHistoryModal);
   document.getElementById('btn-open-settings')?.addEventListener('click', openSettingsModal);
 
-  // Clear History
+  // Clear History (v1.06.43: confirm dialog guard)
   document.getElementById('btn-clear-history')?.addEventListener('click', () => {
-    state.history = [];
-    localStorage.removeItem('wos_enemy_history');
-    renderHistoryList();
+    if (confirm('履歴をすべて消去しますか？')) {
+      state.history = [];
+      localStorage.removeItem('wos_enemy_history');
+      renderHistoryList();
+    }
   });
 
   // Theme & Settings Handlers
@@ -2939,7 +2987,7 @@ function initApp() {
   });
 
   // Local Storage and App state fully initialized
-  // v1.06.26: スプラッシュが非表示状態の場合の初回オンボーディング自動起動フォールバック
+  // v1.06.43: スプラッシュが非表示状態の場合の初回オンボーディング自動起動フォールバック
   const splashEl = document.getElementById('splash-screen');
   if (splashEl && (splashEl.style.display === 'none' || splashEl.classList.contains('hidden'))) {
     setTimeout(() => {
@@ -3085,7 +3133,7 @@ function saveStrategyNote() {
 
 
 /**
- * 差し込み計算進行中のリアルタイム再計算エンジン (v1.06.26)
+ * 差し込み計算進行中のリアルタイム再計算エンジン (v1.06.43)
  * 集結中/行軍中の切替、行軍時間の変更、残り時間調整時に瞬時に着弾＆発車時刻を再計算
  */
 function recalculateSimpleLaunchStateOnMarchChange(showVisualFeedback = false, overrideRemSec = null) {
@@ -3227,7 +3275,10 @@ function toggleAllianceFeature() {
   setAllianceFeatureVisible(!currentVisible);
 }
 
-function setAllianceFeatureVisible() {}
+// Legacy compatibility helper
+function setAllianceFeatureVisible(visible) {
+  // No-op for forward/backward compatibility
+}
 
 function triggerSimpleEnemyLaunch() {
   resetAllianceCopyStatus();
@@ -3487,7 +3538,8 @@ function resetSimpleLaunchCalculation() {
 
   const subInfo = document.getElementById('simple-sub-info');
   if (subInfo) {
-    if (subInfo) subInfo.textContent = "相手着弾 0.3秒後 直後に自動合わせ";
+    const marginSecStr = (getInsertionMarginMs() / 1000).toFixed(1);
+    subInfo.textContent = `相手着弾 ${marginSecStr}秒後 直後に自動合わせ`;
   }
 
   const btnReset = document.getElementById('btn-simple-reset');
@@ -3515,11 +3567,11 @@ function toggleAllianceTimelineCard() {
 }
 
 function selectTimelineRowMember(name) {
-  const encodedName = decodeURIComponent(name);
-  if (selectedTimelineMemberName === encodedName) {
+  const targetName = name || '';
+  if (selectedTimelineMemberName === targetName) {
     selectedTimelineMemberName = null;
   } else {
-    selectedTimelineMemberName = encodedName;
+    selectedTimelineMemberName = targetName;
   }
   updateAllianceTimeline(true);
 }
@@ -3530,7 +3582,8 @@ function updateAllianceTimeline(forceRender = false) {
   const tableContainer = document.getElementById('alliance-timeline-table-container');
   const tbody = document.getElementById('alliance-timeline-tbody');
 
-  const selectedMembers = allianceMembers.filter(m => m.selected !== false);
+  const curGroup = typeof getActiveAllianceGroup === 'function' ? getActiveAllianceGroup() : null;
+    const selectedMembers = (curGroup ? curGroup.members : allianceMembers).filter(m => m.selected !== false);
   if (selectedBadge) selectedBadge.textContent = selectedMembers.length;
 
   if (!tbody) return;
@@ -3610,10 +3663,9 @@ function updateAllianceTimeline(forceRender = false) {
     const selectedClass = isRowSelected ? 'timeline-row-selected' : '';
     const rowBg = index === 0 ? 'bg-yellow-950/30' : (index % 2 === 0 ? 'bg-black/30' : 'bg-cyan-950/20');
 
-    const safeName = encodeURIComponent(m.name);
 
     html += `
-      <tr data-member-name="${m.name}" class="${rowBg} ${selectedClass} hover:bg-cyan-900/40 transition-colors cursor-pointer select-none" onclick="selectTimelineRowMember('${safeName}')">
+      <tr data-member-name="${escapeHtml(m.name)}" class="${rowBg} ${selectedClass} hover:bg-cyan-900/40 transition-colors cursor-pointer select-none" onclick="selectTimelineRowMember(this.getAttribute('data-member-name'))">
         <td class="p-1.5 text-center font-bold text-gray-400 text-[10px]">${index + 1}</td>
         <td class="p-1.5 font-bold text-cyan-200 truncate max-w-[100px]">${escapeHtml(m.name)}</td>
         <td class="p-1.5 text-center text-gray-400 text-[10px]">(${formatCountdownMMSS(m.marchSec)})</td>
@@ -4304,6 +4356,7 @@ function clearAllAllianceMembers() {
 }
 
 function deleteAllianceMember(id) {
+  id = decodeURIComponent(id || "");
   const curGroup = getActiveAllianceGroup();
   if (!curGroup) return;
   curGroup.members = curGroup.members.filter(m => m.id !== id);
@@ -4355,10 +4408,10 @@ function renderAllianceMemberList() {
         <span class="font-bold text-cyan-200 truncate">${escapeHtml(m.name)}</span>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
-        <button class="btn-game btn-xs bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 font-mono font-bold px-2 py-1 text-xs hover:scale-105 transition-transform" onclick="openAllianceKeypadModal('${m.id}')" title="タップして時間を変更">
+        <button class="btn-game btn-xs bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 font-mono font-bold px-2 py-1 text-xs hover:scale-105 transition-transform" onclick="openAllianceKeypadModal('${encodeURIComponent(m.id)}')" title="タップして時間を変更">
           ⏱ ${formatCountdownMMSS(m.marchSec)} <i class="fa-solid fa-pen-to-square text-[10px] ml-0.5"></i>
         </button>
-        <button class="text-red-400 hover:text-red-300 font-bold px-1.5 py-0.5 text-base" onclick="deleteAllianceMember('${m.id}')">&times;</button>
+        <button class="text-red-400 hover:text-red-300 font-bold px-1.5 py-0.5 text-base" onclick="deleteAllianceMember('${encodeURIComponent(m.id)}')">&times;</button>
       </div>
     `;
     container.appendChild(div);
@@ -4375,7 +4428,7 @@ let keypadInputBuffer = ''; // Stores typed raw digits like "25" (25s) or "130" 
 
 
 
-// --- March Time Keypad Preset & Recent History Engine (v1.06.26) ---
+// --- March Time Keypad Preset & Recent History Engine (v1.06.43) ---
 let keypadRecentHistory = [15, 20, 25, 30]; // Sensible default initial history!
 try {
   const savedHistory = localStorage.getItem('wos_keypad_recent_history');
@@ -4386,12 +4439,14 @@ try {
 } catch (e) {
   keypadRecentHistory = [15, 20, 25, 30];
 }
+window.keypadRecentHistory = keypadRecentHistory;
 
 function saveKeypadRecentHistory(sec) {
   if (!sec || sec <= 0) return;
   keypadRecentHistory = keypadRecentHistory.filter(s => s !== sec);
   keypadRecentHistory.unshift(sec);
   if (keypadRecentHistory.length > 5) keypadRecentHistory = keypadRecentHistory.slice(0, 5);
+  window.keypadRecentHistory = keypadRecentHistory;
   try {
     localStorage.setItem('wos_keypad_recent_history', JSON.stringify(keypadRecentHistory));
   } catch (e) {}
@@ -4428,6 +4483,7 @@ function applyKeypadPresetSeconds(sec) {
 
 
 function openAllianceKeypadModal(memberId) {
+  memberId = decodeURIComponent(memberId || "");
   const curGroup = getActiveAllianceGroup();
   if (!curGroup) return;
   const member = curGroup.members.find(m => m.id === memberId);
@@ -4600,7 +4656,7 @@ function confirmKeypadTime() {
         // Realtime live recalculation if calculation is ongoing
         if (simpleLaunchState.isCalculated) {
           if (activeKeypadInputTarget.elementId === 'simple-remaining-time') {
-            recalculateSimpleLaunchState(totalSec);
+            recalculateSimpleLaunchStateOnMarchChange(false, totalSec);
           } else {
             recalculateSimpleLaunchStateOnMarchChange();
           }
@@ -4697,7 +4753,7 @@ function renderAllianceSelectionList() {
     div.className = 'flex items-center justify-between p-2 rounded hover:bg-cyan-950/50 cursor-pointer border-b border-gray-800/60 text-xs';
     div.innerHTML = `
       <div class="flex items-center gap-2 flex-1 min-w-0 mr-2">
-        <input type="checkbox" class="w-4 h-4 accent-cyan-400 shrink-0" ${isChecked ? 'checked' : ''} onchange="toggleAllianceMemberSelection('${m.id}', this.checked)">
+        <input type="checkbox" class="w-4 h-4 accent-cyan-400 shrink-0" ${isChecked ? 'checked' : ''} onchange="toggleAllianceMemberSelection('${encodeURIComponent(m.id)}', this.checked)">
         <span class="font-bold text-gray-200 truncate">${escapeHtml(m.name)}</span>
       </div>
       <span class="text-yellow-300 font-mono text-[11px] font-bold shrink-0">${formatCountdownMMSS(m.marchSec)}</span>
@@ -4712,6 +4768,7 @@ function renderAllianceSelectionList() {
 }
 
 function toggleAllianceMemberSelection(id, checked) {
+  id = decodeURIComponent(id || "");
   const curGroup = getActiveAllianceGroup();
   if (!curGroup) return;
   const member = curGroup.members.find(m => m.id === id);
@@ -5203,7 +5260,7 @@ let ocrSessionState = {
   manualRemSec: 30
 };
 
-// --- OCR Manual Direct Input & Correction Handlers (v1.06.26) ---
+// --- OCR Manual Direct Input & Correction Handlers (v1.06.43) ---
 function toggleOcrManualSection() {
   // If toggling on, activate manual mode exclusively
   if (!ocrSessionState.isManualSelected) {
@@ -5245,7 +5302,7 @@ function selectOcrAiTarget(idx) {
       enemyLand += parseSecondsFromMMSS(enemyMarchStr);
     }
     const myMarchSec = parseSecondsFromMMSS(document.getElementById('simple-my-march')?.value || '01:30');
-    if ((enemyLand + 0.3 - myMarchSec) - lagSec < -1.0) {
+    if ((enemyLand + (getInsertionMarginMs() / 1000) - myMarchSec) - lagSec < -1.0) {
       showToast('⚠️ 【発車時間切れ】この行軍は時間が経過しており間に合いません！', 'error', 3000);
     }
   }
@@ -5452,7 +5509,7 @@ function extractCaptureTimeFromFile(file) {
   if (file && file.name) {
     const fn = file.name;
     // Matches: 20260825_154626 or 2026-08-25-15-46-26 or 154626
-    const fullDateMatch = fn.match(/(d{4})[-_]?(d{2})[-_]?(d{2})[-_T]?(d{2})[-_]?(d{2})[-_]?(d{2})/);
+    const fullDateMatch = fn.match(/(\d{4})[-_]?(\d{2})[-_]?(\d{2})[-_T]?(\d{2})[-_]?(\d{2})[-_]?(\d{2})/);
     if (fullDateMatch) {
       const year = parseInt(fullDateMatch[1], 10);
       const month = parseInt(fullDateMatch[2], 10) - 1;
@@ -5469,7 +5526,7 @@ function extractCaptureTimeFromFile(file) {
       }
     }
     // Matches short time in name: 15-46-26 or 154626
-    const timeOnlyMatch = fn.match(/(d{2})[-_](d{2})[-_](d{2})/);
+    const timeOnlyMatch = fn.match(/(\d{2})[-_]?(\d{2})[-_]?(\d{2})/);
     if (timeOnlyMatch) {
       const d = new Date(now);
       d.setHours(parseInt(timeOnlyMatch[1], 10), parseInt(timeOnlyMatch[2], 10), parseInt(timeOnlyMatch[3], 10), 0);
@@ -6034,7 +6091,7 @@ function updateOcrTimeoutSafety(lagSec) {
   }
 
   // Time remaining to launch from NOW
-  const remainingUntilLaunch = (enemyTotalLandSec + 0.3 - myMarchSec) - lagSec;
+  const remainingUntilLaunch = (enemyTotalLandSec + (getInsertionMarginMs() / 1000) - myMarchSec) - lagSec;
   const warningEl = document.getElementById('ocr-timeout-warning');
   const confirmBtn = document.getElementById('btn-confirm-ocr-sync');
 
@@ -6111,7 +6168,7 @@ function applySelectedOcrTarget() {
     enemyLandDate = new Date(startNow.getTime() + remSec * 1000);
   }
 
-  const targetLaunchDate = new Date(enemyLandDate.getTime() + 300 - mySec * 1000);
+  const targetLaunchDate = new Date(enemyLandDate.getTime() + getInsertionMarginMs() - mySec * 1000);
 
   simpleLaunchState.isCalculated = true;
   simpleLaunchState.statusMode = selected.mode;
@@ -6202,7 +6259,7 @@ window.readFromClipboardDirectly = async function() {
 };
 
 
-// --- Modern 5-Hub Main Tab Switcher (v1.06.26) ---
+// --- Modern 5-Hub Main Tab Switcher (v1.06.43) ---
 let currentActiveMainTab = 'single';
 
 function switchMainTab(tabName) {
@@ -6274,7 +6331,7 @@ function copyAllianceChatFromModal() {
   closeOperationShareModal();
 }
 
-// --- Unified Alliance Chat Generators (v1.06.26) ---
+// --- Unified Alliance Chat Generators (v1.06.43) ---
 function generateAllianceChatText() {
   if (!simpleLaunchState.isCalculated || !simpleLaunchState.targetLaunchDate) {
     return `⚔️【ホワサバ 差し込み発車指示】
@@ -6304,7 +6361,7 @@ function copyAllianceChat() {
 }
 
 
-// --- Dedicated Clock Adjustment Modal Helpers (v1.06.26) ---
+// --- Dedicated Clock Adjustment Modal Helpers (v1.06.43) ---
 function openClockAdjustModal() {
   const modal = document.getElementById('clock-adjust-modal');
   if (modal) modal.classList.add('open');
@@ -6316,7 +6373,7 @@ function closeClockAdjustModal() {
 }
 
 
-// --- Remaining Time Quick Adjust Modal Helpers (v1.06.26) ---
+// --- Remaining Time Quick Adjust Modal Helpers (v1.06.43) ---
 function openRemTimeAdjustModal() {
   updateModalRemTimeDisplay();
   const modal = document.getElementById('rem-time-adjust-modal');
@@ -6387,7 +6444,7 @@ function adjustSimpleRemainingTimeInModal(delta) {
 }
 
 
-// --- Comprehensive Help Guide Modal Helpers (v1.06.26) ---
+// --- Comprehensive Help Guide Modal Helpers (v1.06.43) ---
 function openHelpGuideModal() {
   const modal = document.getElementById('help-guide-modal');
   if (modal) modal.classList.add('open');
@@ -6399,7 +6456,7 @@ function closeHelpGuideModal() {
 }
 
 
-// --- Operation Share Modal Sub-Tabs (v1.06.26 Plan A) ---
+// --- Operation Share Modal Sub-Tabs (v1.06.43 Plan A) ---
 let currentShareSubTab = 'copy';
 
 function switchShareSubTab(tabName) {
@@ -6428,39 +6485,43 @@ function switchShareSubTab(tabName) {
 }
 
 
-// --- Global Data Backup & Restore Engine (v1.06.26) ---
+// --- Global Data Backup & Restore Engine (v1.06.51) ---
+const BACKUP_STORAGE_KEYS = [
+  "wos_alliance_groups_data_v2",
+  "wos_alliance_members",
+  "wos_enemy_presets",
+  "wos_strategy_note",
+  "wos_my_march_time",
+  "wos_calc_history",
+  "wos_enemy_history",
+  "wos_app_settings",
+  "wos_insertion_margin_ms",
+  "wos_simple_audio_muted",
+  "wos_simple_vibration_enabled",
+  "wos_floating_memo_text",
+  "wos_floating_memo_land_time_show",
+  "wos_floating_memo_pos",
+  "wos_keypad_recent_history",
+  "wos_alliance_selection_sort_mode",
+  "wos_alliance_copy_sort_mode",
+  "wos_active_main_tab",
+  "wos_button_theme",
+  "wos_onboarding_completed"
+];
+window.BACKUP_STORAGE_KEYS = BACKUP_STORAGE_KEYS;
+
 function exportAllAppDataJSON() {
   try {
     const backupData = {
-      version: '1.06.00',
-      exportedAt: new Date().toISOString(),
+      appVersion: '1.06.51',
+      schemaVersion: 3,
+      version: '1.06.51',
       appName: 'WOS Insertion Calculator',
+      exportedAt: new Date().toISOString(),
       storage: {}
     };
 
-    const targetKeys = [
-      'wos_alliance_groups_data_v2',
-      'wos_alliance_members',
-      'wos_enemy_presets',
-      'wos_strategy_note',
-      'wos_my_march_time',
-      'wos_calc_history',
-      'wos_enemy_history',
-      'wos_app_settings',
-      'wos_insertion_margin_ms',
-      'wos_simple_audio_muted',
-      'wos_simple_vibration_enabled',
-      'wos_floating_memo_text',
-      'wos_floating_memo_land_time_show',
-      'wos_floating_memo_pos',
-      'wos_keypad_recent_history',
-      'wos_alliance_selection_sort_mode',
-      'wos_alliance_copy_sort_mode',
-      'wos_active_main_tab',
-      'wos_button_theme'
-    ];
-
-    targetKeys.forEach(k => {
+    BACKUP_STORAGE_KEYS.forEach(k => {
       const val = localStorage.getItem(k);
       if (val !== null) backupData.storage[k] = val;
     });
@@ -6501,17 +6562,66 @@ function handleImportAppDataFile(event) {
       const content = e.target.result;
       const parsed = JSON.parse(content);
 
-      if (!parsed || !parsed.storage || typeof parsed.storage !== 'object') {
+      if (!parsed || !parsed.storage || typeof parsed.storage !== 'object' || Array.isArray(parsed.storage)) {
         throw new Error('有効なWOSバックアップ設定ファイルではありません。');
+      }
+
+      // チャッピー・Gemini指摘対応: 未知の未来スキーマバージョン検査 (schemaVersion > 3 は拒絶, 厳格整数チェック)
+      const CURRENT_SCHEMA_VERSION = 3;
+      if (parsed.schemaVersion !== undefined && !Number.isInteger(parsed.schemaVersion)) {
+        throw new Error('バックアップ設定ファイルの形式が不正です (schemaVersion must be integer)');
+      }
+      if (typeof parsed.schemaVersion === 'number' && parsed.schemaVersion > CURRENT_SCHEMA_VERSION) {
+        throw new Error(`未対応の新しいバックアップ形式です (Schema: ${parsed.schemaVersion})。最新版のアプリをご利用ください。`);
+      }
+
+      // チャッピー指摘対応 (P1: Pre-validation):
+      // Clean Restore（既存データ消去）前に、含まれる各キーの値型・JSON構造を事前検査
+      // 不正なデータ構造が1つでも含まれる場合は既存データを消去せずにエラー中断（自爆防止）
+      for (const k of Object.keys(parsed.storage)) {
+        if (!BACKUP_STORAGE_KEYS.includes(k)) continue;
+        const val = parsed.storage[k];
+        if (typeof val !== 'string') {
+          throw new Error(`ストレージキー [${k}] の値が文字列形式ではありません。`);
+        }
+        // JSONオブジェクト形式であるべき主要キーの構文・構造検証
+        if (['wos_enemy_presets', 'wos_enemy_history', 'wos_calc_history', 'wos_keypad_recent_history'].includes(k)) {
+          try {
+            const pVal = JSON.parse(val);
+            if (!Array.isArray(pVal)) {
+              throw new Error(`キー [${k}] は配列データである必要があります。`);
+            }
+          } catch (e) {
+            throw new Error(`キー [${k}] のJSON解析に失敗しました: ${e.message}`);
+          }
+        }
+        if (['wos_alliance_groups_data_v2', 'wos_app_settings', 'wos_floating_memo_pos'].includes(k)) {
+          try {
+            const pVal = JSON.parse(val);
+            if (typeof pVal !== 'object' || pVal === null || Array.isArray(pVal)) {
+              throw new Error(`キー [${k}] はオブジェクトデータである必要があります。`);
+            }
+          } catch (e) {
+            throw new Error(`キー [${k}] のJSON解析に失敗しました: ${e.message}`);
+          }
+        }
       }
 
       if (!confirm('⚠️ 【全データ復元の確認】\nバックアップファイルの内容を読み込みます。\n現在の設定・同盟メンバー・メモは上書きされますがよろしいですか？')) {
         return;
       }
 
-      // Apply storage keys
+      // チャッピー指摘対応: 完全Restore (Clean Restore) 仕様
+      // 復元前に管理対象キーを一度クリアし、古い不要データの残留を完全防止
+      BACKUP_STORAGE_KEYS.forEach(k => {
+        localStorage.removeItem(k);
+      });
+
+      // Gemini/チャッピー指摘対応: BACKUP_STORAGE_KEYS と完全一致するホワイトリストのみを受け入れ
       Object.keys(parsed.storage).forEach(k => {
-        localStorage.setItem(k, parsed.storage[k]);
+        if (BACKUP_STORAGE_KEYS.includes(k)) {
+          localStorage.setItem(k, parsed.storage[k]);
+        }
       });
 
       alert('📥 【復元完了】\nすべての設定・同盟名簿・メモを正常に復元しました！\n画面を再読み込みします。');
@@ -6525,7 +6635,7 @@ function handleImportAppDataFile(event) {
 
 
 // ==========================================================================
-// 🔰 Interactive Onboarding Tour Engine (v1.06.26 - Yan-chan 3-Step Experience)
+// 🔰 Interactive Onboarding Tour Engine (v1.06.43 - Yan-chan 3-Step Experience)
 // ==========================================================================
 let onboardingTourState = {
   active: false,
@@ -6533,13 +6643,18 @@ let onboardingTourState = {
   savedValues: null
 };
 
+let onboardingScheduleId = null;
 function checkAndTriggerOnboarding() {
   const isDone = localStorage.getItem('wos_onboarding_completed');
-  if (!isDone) {
-    setTimeout(() => {
+  if (isDone) return;
+  if (onboardingScheduleId !== null) return; // チャッピー指摘対応: 予約レベルの多重起動ガード
+
+  onboardingScheduleId = setTimeout(() => {
+    onboardingScheduleId = null;
+    if (!localStorage.getItem('wos_onboarding_completed')) {
       startOnboardingTour(false);
-    }, 400);
-  }
+    }
+  }, 400);
 }
 window.checkAndTriggerOnboarding = checkAndTriggerOnboarding;
 
