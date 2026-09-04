@@ -29,6 +29,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Allow natural text selection on inputs, textareas, and copyable content */
+input, textarea, [contenteditable="true"], .user-select-text {
+  user-select: text !important;
+}
+
 html {
   overflow-y: scroll;
 }
@@ -854,7 +859,7 @@ body[data-btn-theme="gold"] .btn-toggle-off {
   flex-direction: row !important;
   justify-content: space-around !important;
   align-items: center !important;
-  padding: 4px 6px !important;
+  padding: 4px 6px calc(6px + env(safe-area-inset-bottom, 0px)) 6px !important;
   z-index: 100050 !important; /* Above all modals so user can always switch tabs instantly */
   box-sizing: border-box !important;
 }

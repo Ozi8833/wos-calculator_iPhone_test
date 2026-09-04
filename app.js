@@ -10,6 +10,11 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+const APP_VERSION = '1.06.66';
+window.APP_VERSION = APP_VERSION;
+const CURRENT_SCHEMA_VERSION = 3;
+window.CURRENT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
+
 /* ==========================================================================
    Whiteout Survival Insertion Calculator & Multi-March Tracker (v10.0 Logic)
    ========================================================================== */
@@ -45,40 +50,35 @@ const state = {
 };
 
 // --- Enemy Preset LocalStorage Helpers ---
+function generateUniquePresetId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return 'ep_' + crypto.randomUUID();
+  }
+  return 'ep_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+}
+
 function saveEnemyPreset(tag, name, marchSec) {
   if (!tag && !name) return;
-  const key = `${tag.trim()}:${name.trim()}`;
-  const existing = state.enemyPresets.find(p => p.key === key);
+  const cleanTag = tag.trim();
+  const cleanName = name.trim();
+  const naturalKey = `${cleanTag}:${cleanName}`;
+  
+  // 同盟タグ＋名前が一致する既存プリセットがあれば更新、無ければ衝突ゼロの一意IDを付与して先頭追加
+  const existing = state.enemyPresets.find(p => (p.key === naturalKey) || (p.tag === cleanTag && p.name === cleanName));
   if (!existing) {
-    state.enemyPresets.unshift({ key, tag: tag.trim(), name: name.trim(), marchSec });
+    const id = generateUniquePresetId();
+    state.enemyPresets.unshift({ id, key: id, naturalKey, tag: cleanTag, name: cleanName, marchSec });
     if (state.enemyPresets.length > 20) state.enemyPresets.pop();
   } else {
+    if (!existing.id) existing.id = generateUniquePresetId();
+    existing.key = existing.id;
+    existing.naturalKey = naturalKey;
     existing.marchSec = marchSec;
   }
   localStorage.setItem('wos_enemy_presets', JSON.stringify(state.enemyPresets));
 }
 
-function deleteSelectedPreset(marchId) {
-  const cardElem = document.querySelector(`.march-card[data-id="${marchId}"]`);
-  if (!cardElem) return;
-  const selectElem = cardElem.querySelector('select');
-  if (!selectElem || selectElem.value === '') {
-    alert('削除するプリセットをドロップダウンから選択してください。');
-    return;
-  }
-  const idx = parseInt(selectElem.value, 10);
-  const deletedItem = state.enemyPresets.splice(idx, 1)[0];
-  if (deletedItem) {
-    state.lastDeletedPreset = deletedItem;
-    state.marchList.forEach(m => {
-      if (m.selectedPresetIndex === idx) delete m.selectedPresetIndex;
-    });
-    localStorage.setItem('wos_enemy_presets', JSON.stringify(state.enemyPresets));
-    renderMarchCards();
-    calculateInsertion();
-    alert(`プリセット [${deletedItem.tag || ''}] ${deletedItem.name || ''} を削除しました！「↩️ 復元」ボタンで戻せます。`);
-  }
-}
+/* [RETIRED in v1.06.64] deleteSelectedPreset */
 
 function undoDeletePreset() {
   if (!state.lastDeletedPreset) {
@@ -143,28 +143,33 @@ function renderPresetPickerList() {
     return;
   }
 
-  // Create indexed copy for sorting while retaining original array index for deletion
-  let indexedPresets = state.enemyPresets.map((p, originalIdx) => ({ preset: p, originalIdx }));
+  // チャッピー指摘対応: indexedPresets/originalIdx を完全撤去し、純粋配列コピーでソート
+  const sortedPresets = [...state.enemyPresets];
 
   if (presetSortMode === 'tag') {
-    indexedPresets.sort((a, b) => {
-      const tagA = (a.preset.tag || '').toUpperCase();
-      const tagB = (b.preset.tag || '').toUpperCase();
+    sortedPresets.sort((a, b) => {
+      const tagA = (a.tag || '').toUpperCase();
+      const tagB = (b.tag || '').toUpperCase();
       return tagA.localeCompare(tagB, 'ja');
     });
   } else if (presetSortMode === 'name') {
-    indexedPresets.sort((a, b) => {
-      const nameA = (a.preset.name || '').toUpperCase();
-      const nameB = (b.preset.name || '').toUpperCase();
+    sortedPresets.sort((a, b) => {
+      const nameA = (a.name || '').toUpperCase();
+      const nameB = (b.name || '').toUpperCase();
       return nameA.localeCompare(nameB, 'ja');
     });
   }
 
-  indexedPresets.forEach(({ preset: p, originalIdx }) => {
+  sortedPresets.forEach(p => {
     const item = document.createElement('div');
     item.className = 'preset-item-card';
+    const presetId = String(p.id || p.key || generateUniquePresetId());
+    if (!p.id) p.id = presetId;
+    if (!p.key) p.key = presetId;
+    item.dataset.presetId = presetId;
+
     item.innerHTML = `
-      <div class="flex-1 cursor-pointer" onclick="selectPresetFromModal(${originalIdx})">
+      <div class="preset-select-area flex-1 cursor-pointer" data-preset-id="${escapeHtml(presetId)}">
         <div class="font-bold text-cyan-300 text-sm flex items-center gap-2">
           ${p.tag ? `<span class="bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded text-xs font-mono">[${escapeHtml(p.tag)}]</span>` : ''}
           <span>${escapeHtml(p.name) || '領主名なし'}</span>
@@ -173,16 +178,36 @@ function renderPresetPickerList() {
           行軍時間: <span class="text-yellow-300 font-bold">${formatCountdownMMSSs(p.marchSec)}</span>
         </div>
       </div>
-      <button class="preset-delete-btn" onclick="deletePresetFromModal(event, ${originalIdx})" title="このプリセットを削除">
-        <i class="fa-solid fa-trash-can text-lg"></i>
+      <button type="button" class="preset-delete-btn" data-preset-id="${escapeHtml(presetId)}" title="このプリセットを削除">
+        <i class="fa-solid fa-trash-can text-lg pointer-events-none"></i>
       </button>
     `;
+
+    // チャッピー推奨: dataset を Single Source of Truth としてイベント受領
+    const selectArea = item.querySelector('.preset-select-area');
+    if (selectArea) {
+      selectArea.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.presetId;
+        selectPresetFromModal(id);
+      });
+    }
+
+    const deleteBtn = item.querySelector('.preset-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.presetId;
+        deletePresetFromModal(e, id);
+      });
+    }
+
     listElem.appendChild(item);
   });
 }
 
-function selectPresetFromModal(presetIdx) {
-  const p = state.enemyPresets[presetIdx];
+function selectPresetFromModal(presetId) {
+  if (!presetId) return;
+  // 純粋Stable IDによるlookup（配列Index受け入れは完全撤去）
+  const p = state.enemyPresets.find(item => item.id === presetId || item.key === presetId);
   if (!p) return;
 
   const march = state.marchList.find(m => m.id === currentTargetMarchIdForPreset);
@@ -190,17 +215,31 @@ function selectPresetFromModal(presetIdx) {
     march.allianceTag = p.tag;
     march.governorName = p.name;
     march.marchTimeSec = p.marchSec;
+    march.selectedPresetKey = p.id || p.key;
+    delete march.selectedPresetIndex;
     renderMarchCards();
     calculateInsertion();
   }
   closePresetPickerModal();
 }
 
-function deletePresetFromModal(event, presetIdx) {
-  event.stopPropagation();
-  const deletedItem = state.enemyPresets.splice(presetIdx, 1)[0];
+function deletePresetFromModal(event, presetId) {
+  if (event && event.stopPropagation) event.stopPropagation();
+  if (!presetId) return;
+  // 純粋Stable IDによるlookup（配列Index受け入れは完全撤去）
+  const targetIdx = state.enemyPresets.findIndex(item => item.id === presetId || item.key === presetId);
+  if (targetIdx === -1) return;
+
+  const deletedItem = state.enemyPresets.splice(targetIdx, 1)[0];
   if (deletedItem) {
     state.lastDeletedPreset = deletedItem;
+    const deletedId = deletedItem.id || deletedItem.key;
+    state.marchList.forEach(m => {
+      if (m.selectedPresetKey === deletedId || m.selectedPresetKey === deletedItem.naturalKey) {
+        delete m.selectedPresetKey;
+      }
+      if (m.selectedPresetIndex !== undefined) delete m.selectedPresetIndex;
+    });
     localStorage.setItem('wos_enemy_presets', JSON.stringify(state.enemyPresets));
     renderPresetPickerList();
     renderMarchCards();
@@ -214,12 +253,33 @@ function loadEnemyPresets() {
     try {
       const parsed = JSON.parse(saved);
       state.enemyPresets = Array.isArray(parsed) ? parsed : [];
+      // 既存レガシープリセットへの id 付与および正規化
+      state.enemyPresets.forEach(p => {
+        if (!p.id) p.id = p.key || generateUniquePresetId();
+        if (!p.key) p.key = p.id;
+        if (!p.naturalKey) p.naturalKey = `${p.tag || ''}:${p.name || ''}`;
+      });
     } catch (e) {
       state.enemyPresets = [];
     }
   } else {
     state.enemyPresets = [];
   }
+
+  // [LEGACY MIGRATION LAYER - チャッピー提案対応]
+  // 過去バージョン(v1.06.35以前)の selectedPresetIndex を読み込み時に完全自動移行・隔離
+  if (Array.isArray(state.marchList)) {
+    state.marchList.forEach(march => {
+      if (!march.selectedPresetKey && typeof march.selectedPresetIndex === 'number') {
+        const legacyPreset = state.enemyPresets[march.selectedPresetIndex];
+        if (legacyPreset && legacyPreset.id) {
+          march.selectedPresetKey = legacyPreset.id;
+        }
+        delete march.selectedPresetIndex; // 移行完了によりレガシーIndexを完全削除
+      }
+    });
+  }
+
   const savedNote = localStorage.getItem('wos_strategy_note');
   if (savedNote) state.strategyNote = savedNote;
 }
@@ -252,11 +312,12 @@ function renderMarchCards() {
 
     const isRunning = march.isRunning;
 
-    // Preset dropdown options
+    // Preset dropdown options (純粋 Stable Key 単一責任 - チャッピー指摘対応)
     let presetOptionsHtml = '<option value="">-- 💾 プリセット呼出 --</option>';
-    state.enemyPresets.forEach((p, pIdx) => {
-      const isSelected = march.selectedPresetIndex === pIdx;
-      presetOptionsHtml += `<option value="${pIdx}" ${isSelected ? 'selected' : ''}>[${escapeHtml(p.tag)}] ${escapeHtml(p.name)} (${formatCountdownMMSSs(p.marchSec)})</option>`;
+    state.enemyPresets.forEach(p => {
+      const pKey = p.id || p.key;
+      const isSelected = march.selectedPresetKey && (march.selectedPresetKey === pKey || march.selectedPresetKey === p.naturalKey);
+      presetOptionsHtml += `<option value="${escapeHtml(pKey)}" ${isSelected ? 'selected' : ''}>[${escapeHtml(p.tag)}] ${escapeHtml(p.name)} (${formatCountdownMMSSs(p.marchSec)})</option>`;
     });
 
     const hideAdjust = state.settings.hideAdjustButtons || false;
@@ -396,19 +457,20 @@ function updateMarchData(id, field, value) {
 }
 
 function getProjectedLandDate(march) {
-  if (march.targetLandDate) {
+  if (march.targetLandDate instanceof Date && !isNaN(march.targetLandDate.getTime())) {
     return march.targetLandDate;
   }
   if (march.startTimestamp && march.initialRallySec !== undefined) {
-    return new Date(march.startTimestamp + (march.initialRallySec + march.marchTimeSec) * 1000);
+    return new Date(march.startTimestamp + (march.initialRallySec + (march.marchTimeSec || 90)) * 1000);
   }
+  const refNow = getAdjustedNowTime();
+  const rem = typeof march.remainingRallySec === 'number' ? march.remainingRallySec : 300;
+  const mSec = typeof march.marchTimeSec === 'number' ? march.marchTimeSec : 90;
   if (march.isRunning) {
-    const refNow = getAdjustedNowTime();
-    return new Date(refNow.getTime() + (march.remainingRallySec + march.marchTimeSec) * 1000);
+    return new Date(refNow.getTime() + (rem + mSec) * 1000);
   }
-  if (!march.frozenLandDate) {
-    const refNow = getAdjustedNowTime();
-    march.frozenLandDate = new Date(refNow.getTime() + (march.remainingRallySec + march.marchTimeSec) * 1000);
+  if (!march.frozenLandDate || !(march.frozenLandDate instanceof Date) || isNaN(march.frozenLandDate.getTime())) {
+    march.frozenLandDate = new Date(refNow.getTime() + (rem + mSec) * 1000);
   }
   return march.frozenLandDate;
 }
@@ -475,6 +537,12 @@ function onLandTimeInputChange(marchId, valStr) {
   }
 }
 
+function setMarchRunning(march, running) {
+  if (!march) return;
+  march.isRunning = running;
+  syncWakeLock();
+}
+
 function startMarchTimer(id, skipRender = false) {
   initAudio();
   const march = state.marchList.find(m => m.id === id);
@@ -488,7 +556,7 @@ function startMarchTimer(id, skipRender = false) {
       // Clear frozenLandDate so getProjectedLandDate computes live dynamically while running
       delete march.frozenLandDate;
     }
-    march.isRunning = true;
+    setMarchRunning(march, true);
     march.hasBeenStarted = true;
     march.startTimestamp = now.getTime();
     march.initialRallySec = march.remainingRallySec;
@@ -532,23 +600,10 @@ function removeMarchCard(id) {
   state.selectedGapIndex = 0;
   renderMarchCards();
   calculateInsertion();
+  syncWakeLock();
 }
 
-function applyEnemyPresetToMarch(marchId, presetIndex) {
-  if (presetIndex === '') return;
-  const idx = parseInt(presetIndex, 10);
-  const p = state.enemyPresets[idx];
-  if (!p) return;
-  const march = state.marchList.find(m => m.id === marchId);
-  if (march) {
-    march.allianceTag = p.tag;
-    march.governorName = p.name;
-    march.marchTimeSec = p.marchSec;
-    march.selectedPresetIndex = idx;
-    renderMarchCards();
-    calculateInsertion();
-  }
-}
+// applyEnemyPresetToMarch has been retired in favor of production selectPresetFromModal()
 
 function saveCurrentMarchAsPreset(marchId) {
   const march = state.marchList.find(m => m.id === marchId);
@@ -586,6 +641,7 @@ function clearAllMarches() {
     state.selectedGapIndex = 0;
     renderMarchCards();
     calculateInsertion();
+    syncWakeLock();
   }
 }
 
@@ -613,7 +669,6 @@ function initAudio() {
         console.log('🔊 AudioContext unlocked successfully with iOS silent buffer');
       }
     }
-    requestScreenWakeLock();
   } catch (e) {
     console.warn('initAudio error:', e);
   }
@@ -638,48 +693,82 @@ function playBeep(freq = 880, type = 'sine', duration = 0.15) {
 }
 
 
-// --- Screen Wake Lock Manager (v1.06.43) ---
+// --- Screen Wake Lock Manager (v1.06.57 Detached-Release & Recovery Lifecycle) ---
 let wakeLockInstance = null;
+let wakeLockToken = 0; // チャッピー指摘対応: 非同期リクエスト競合 (Race Condition) 根絶用世代トークン
 
 async function requestScreenWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  if (wakeLockInstance) return; // 既に保持中の場合は多重取得しない
+
+  const currentToken = ++wakeLockToken;
   try {
-    if ('wakeLock' in navigator && !wakeLockInstance) {
-      wakeLockInstance = await navigator.wakeLock.request('screen');
-      console.log('💡 Screen WakeLock acquired: Display will stay on');
-      wakeLockInstance.addEventListener('release', () => {
+    const sentinel = await navigator.wakeLock.request('screen');
+    // 非同期待機中に状態が変化して release されていた場合は即座に破棄して復帰
+    if (wakeLockToken !== currentToken || !isAnyTimerActive()) {
+      try { await sentinel.release(); } catch (e) {}
+      console.log('💡 Screen WakeLock discarded: Request superseded during async acquire');
+      return;
+    }
+    wakeLockInstance = sentinel;
+    console.log('💡 Screen WakeLock acquired: Display will stay on (token: ' + currentToken + ')');
+    wakeLockInstance.addEventListener('release', () => {
+      if (wakeLockInstance === sentinel) {
         wakeLockInstance = null;
         console.log('💡 Screen WakeLock released');
-      });
-    }
+        // チャッピー指摘対応 (外部解除からの自動回復): タイマー稼働中ならマイクロタスクで再取得
+        if (isAnyTimerActive()) {
+          queueMicrotask(syncWakeLock);
+        }
+      }
+    });
   } catch (err) {
     console.warn('WakeLock request failed or unsupported:', err);
   }
 }
 
 async function releaseScreenWakeLock() {
-  if (wakeLockInstance) {
+  // チャッピー指摘対応 (P0-1 release/restart race 根絶):
+  // await release() での待機前に即座にインスタンスを切り離し世代トークンを進める
+  // これにより release 待機中に直後の START が発生しても「保持中」と誤判定せず新トークンで再取得可能
+  const instance = wakeLockInstance;
+  wakeLockInstance = null;
+  wakeLockToken++;
+
+  if (instance) {
     try {
-      await wakeLockInstance.release();
+      await instance.release();
     } catch (e) {}
-    wakeLockInstance = null;
+    console.log('💡 Screen WakeLock cleanly released (detached)');
   }
 }
 
-// Re-acquire wake lock on visibility change (when user returns to app)
-// Helper to check if any timer is actively running across single or multi modes (v1.06.44)
+// Helper to check if any timer is actively running across single or multi modes
 function isAnyTimerActive() {
-  if (simpleLaunchState && simpleLaunchState.isCalculated) return true;
+  if (typeof simpleLaunchState !== 'undefined' && simpleLaunchState && simpleLaunchState.isCalculated) return true;
   if (Array.isArray(state.marchList) && state.marchList.some(m => m.isRunning)) return true;
   if (typeof isAllianceCalculationActive === 'function' && isAllianceCalculationActive()) return true;
   return false;
 }
 
-// Re-acquire wake lock on visibility change (when user returns to app)
-document.addEventListener('visibilitychange', async () => {
+// チャッピー指摘対応 (P1): syncWakeLock() による一元ライフサイクル管理
+// タイマー稼働中のみ画面スリープを防止し、タイマー未稼働・停止時は即座にWakeLockを解放
+function syncWakeLock() {
+  if (isAnyTimerActive()) {
+    requestScreenWakeLock();
+  } else {
+    releaseScreenWakeLock();
+  }
+}
+window.syncWakeLock = syncWakeLock;
+
+// スリープ復帰・アプリ切替時の表示即時更新 ＆ WakeLock再同期
+document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    if (isAnyTimerActive()) {
-      await requestScreenWakeLock();
+    if (typeof updateAllTimersUI === 'function') {
+      try { updateAllTimersUI(); } catch (e) { console.warn('updateAllTimersUI error on visibilitychange:', e); }
     }
+    syncWakeLock();
   }
 });
 
@@ -912,15 +1001,7 @@ function setMarchRallySecond(id, targetSecond) {
 }
 
 // --- History Storage & Auto Complete ---
-function saveEnemyHistory(tag, name) {
-  if (!tag && !name) return;
-  const key = `${tag.trim()}:${name.trim()}`;
-  if (!state.history.some(h => h.key === key)) {
-    state.history.unshift({ key, tag: tag.trim(), name: name.trim(), timestamp: Date.now() });
-    if (state.history.length > 20) state.history.pop();
-    localStorage.setItem('wos_enemy_history', JSON.stringify(state.history));
-  }
-}
+/* [RETIRED in v1.06.64] saveEnemyHistory */
 
 function loadEnemyHistory() {
   const saved = localStorage.getItem('wos_enemy_history');
@@ -1351,6 +1432,7 @@ function startClockLoop() {
       });
 
       if (cardStateChanged) {
+        syncWakeLock();
         renderMarchCards();
       }
 
@@ -1399,30 +1481,7 @@ function buildAllianceChatText(mode, data) {
 ・最遅発車: ${data.launchMax}`;
 }
 
-function copySimpleAllianceChat() {
-  if (!simpleLaunchState.isCalculated || !simpleLaunchState.targetLaunchDate) {
-    alert('「差し込み計算スタート！」を押して計算を完了させてからコピーしてください。');
-    return;
-  }
-
-  const launchTimeStr = formatTimeHHMMSS(simpleLaunchState.targetLaunchDate);
-  const now = getAdjustedNowTime();
-  const diffSec = Math.max(0, (simpleLaunchState.targetLaunchDate.getTime() - now.getTime()) / 1000);
-  const countdownStr = formatCountdownMMSSs(diffSec);
-
-  const text = buildAllianceChatText('simple', {
-    statusMode: simpleLaunchState.statusMode,
-    launchTimeStr: launchTimeStr,
-    countdownStr: countdownStr
-  });
-
-  navigator.clipboard.writeText(text).then(() => {
-    alert('同盟チャット用指示文をクリップボードにコピーしました！');
-  }).catch(err => {
-    console.error('Clipboard copy error:', err);
-    alert('コピーに失敗しました。');
-  });
-}
+/* [RETIRED in v1.06.64] copySimpleAllianceChat */
 
 function copyChatFormat() {
   const e1 = state.marchList[0] || {};
@@ -1456,6 +1515,7 @@ function copyChatFormat() {
 
 // --- Triple Mode Calculator & Time Converter Engine (v1.03.42) ---
 const calcHistory = [];
+window.calcHistory = calcHistory;
 let calcActiveResultSec = 0; // Cached total seconds for transfer/converter
 
 function switchCalcTab(mode) {
@@ -1834,6 +1894,100 @@ function updateCalcDisplay() {
   }
 }
 
+// チャッピー・Claude指摘対応 (安全性完全保証パーサー):
+// 任意JavaScript実行 eval() 撤去に加え、不正数値構文(複数小数点 1.2.3 等)および括弧不整合((5+3 等)を自身で厳格拒絶
+function safeEvalArithmetic(exprStr) {
+  let cleaned = exprStr.replace(/×/g, '*').replace(/÷/g, '/').replace(/\s+/g, '');
+  if (!cleaned) return 0;
+  // 安全文字ホワイトリスト検査 (数字、小数点、四則演算子、括弧のみ)
+  if (!/^[0-9+\-*/.()]+$/.test(cleaned)) {
+    throw new Error('Invalid arithmetic characters');
+  }
+
+  // 再帰下降構文解析 (Recursive Descent Parser)
+  let pos = 0;
+  function peek() { return cleaned[pos]; }
+  function get() { return cleaned[pos++]; }
+
+  function parsePrimary() {
+    let ch = peek();
+    if (ch === '(') {
+      get(); // consume '('
+      let val = parseExpr();
+      if (peek() !== ')') {
+        throw new Error('Missing closing parenthesis');
+      }
+      get(); // consume ')'
+      return val;
+    }
+    if (ch === '-' || ch === '+') {
+      let sign = get() === '-' ? -1 : 1;
+      return sign * parsePrimary();
+    }
+    let start = pos;
+    let dotCount = 0;
+    while (pos < cleaned.length && /[0-9.]/.test(cleaned[pos])) {
+      if (cleaned[pos] === '.') {
+        dotCount++;
+        if (dotCount > 1) {
+          throw new Error('Invalid number format: multiple decimal points');
+        }
+      }
+      pos++;
+    }
+    if (start === pos) throw new Error('Number expected');
+    let numStr = cleaned.slice(start, pos);
+    if (numStr === '.') {
+      throw new Error('Malformed decimal number: ' + numStr);
+    }
+    let n = parseFloat(numStr);
+    if (isNaN(n)) throw new Error('Invalid number: ' + numStr);
+    return n;
+  }
+
+  function parseFactor() {
+    let val = parsePrimary();
+    while (pos < cleaned.length) {
+      let op = peek();
+      if (op === '*' || op === '/') {
+        get();
+        let right = parsePrimary();
+        if (op === '*') val = val * right;
+        else {
+          if (right === 0) throw new Error('Division by zero');
+          val = val / right;
+        }
+      } else {
+        break;
+      }
+    }
+    return val;
+  }
+
+  function parseExpr() {
+    let val = parseFactor();
+    while (pos < cleaned.length) {
+      let op = peek();
+      if (op === '+' || op === '-') {
+        get();
+        let right = parseFactor();
+        if (op === '+') val = val + right;
+        else val = val - right;
+      } else {
+        break;
+      }
+    }
+    return val;
+  }
+
+  const result = parseExpr();
+  if (pos < cleaned.length) throw new Error('Unexpected token: ' + cleaned[pos]);
+  if (typeof result !== 'number' || !Number.isFinite(result)) {
+    throw new Error('Calculation result is not a finite number');
+  }
+  return Math.round(result * 100000000) / 100000000; // 丸め誤差保護
+}
+
 function evaluateCalc() {
   let expr = state.calc.expression;
   if (!expr) return;
@@ -1841,8 +1995,7 @@ function evaluateCalc() {
   try {
     let resultStr = '';
     if (state.calc.mode === 'normal') {
-      let evalExpr = expr.replace(/×/g, '*').replace(/÷/g, '/');
-      let res = eval(evalExpr);
+      let res = safeEvalArithmetic(expr);
       resultStr = String(res);
       calcActiveResultSec = parseFloat(res) || 0;
     } else {
@@ -2709,9 +2862,7 @@ function setSimpleVibrationState(enabled) {
   updateAllToggleButtonsUI();
 }
 
-function toggleSimpleVibration() {
-  setSimpleVibrationState(!isSimpleVibrationEnabled);
-}
+/* [RETIRED in v1.06.64] toggleSimpleVibration */
 
 let isSimpleAudioMuted = false;
 
@@ -2723,10 +2874,7 @@ function setSimpleAudioMuteState(muted) {
   updateAllToggleButtonsUI();
 }
 
-function toggleSimpleAudioMute() {
-  initAudio();
-  setSimpleAudioMuteState(!isSimpleAudioMuted);
-}
+/* [RETIRED in v1.06.64] toggleSimpleAudioMute */
 
 function applyPresetTheme(themeKey) {
   const t = THEMES[themeKey] || THEMES.cyber;
@@ -2792,7 +2940,7 @@ function closeCalcModal() { document.getElementById('calc-modal').classList.remo
 function openHistoryModal() { renderHistoryList(); document.getElementById('history-modal').classList.add('open'); }
 function closeHistoryModal() { document.getElementById('history-modal').classList.remove('open'); }
 
-function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+/* [RETIRED in v1.06.64] scrollToTop */
 
 // --- DOM Initializer & Startup Control ---
 function initApp() {
@@ -3005,10 +3153,7 @@ if (document.readyState === 'loading') {
 }
 
 // Floating Jump Button Helper
-function jumpToResultCard() {
-  const elem = document.getElementById('result-card');
-  if (elem) elem.scrollIntoView({ behavior: 'smooth' });
-}
+/* [RETIRED in v1.06.64] jumpToResultCard */
 
 // --- Global Timezone Switcher & Reactive UI Engine ---
 function toggleTimezoneBadge() {
@@ -3270,10 +3415,7 @@ function toggleSimpleAdjustButtons(forceState) {
 }
 
 // v1.03.64 Alliance Features (Chat Copy & Timeline) Visibility Switch
-function toggleAllianceFeature() {
-  const currentVisible = state.settings.showAllianceFeatures === true;
-  setAllianceFeatureVisible(!currentVisible);
-}
+/* [RETIRED in v1.06.64] toggleAllianceFeature */
 
 // Legacy compatibility helper
 function setAllianceFeatureVisible(visible) {
@@ -3361,6 +3503,7 @@ function triggerSimpleEnemyLaunch() {
 
   updateSimpleCountdown();
   updateAllianceTimeline();
+  syncWakeLock();
 }
 
 function updateSimpleCountdown() {
@@ -3547,24 +3690,14 @@ function resetSimpleLaunchCalculation() {
 
   // Cleanly clear and hide timeline card
   updateAllianceTimeline();
+  syncWakeLock();
 }
 
 // v1.03.04 Alliance Departure Timeline Implementation (Selection by Name)
 let isAllianceTimelineCollapsed = false;
 let selectedTimelineMemberName = null;
 
-function toggleAllianceTimelineCard() {
-  const content = document.getElementById('alliance-timeline-content');
-  if (!content) return;
-
-  isAllianceTimelineCollapsed = !isAllianceTimelineCollapsed;
-  if (isAllianceTimelineCollapsed) {
-    content.classList.add('hidden');
-  } else {
-    content.classList.remove('hidden');
-  }
-  updateAllToggleButtonsUI();
-}
+/* [RETIRED in v1.06.64] toggleAllianceTimelineCard */
 
 function selectTimelineRowMember(name) {
   const targetName = name || '';
@@ -5720,33 +5853,7 @@ function preprocessImageCanvas(imageElement) {
 }
 
 // Full 1-March Card Block Cropper
-function cropCardSnapshot(img, headerPixelY, canvasScale) {
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    const nw = img.naturalWidth || img.width;
-    const nh = img.naturalHeight || img.height;
-
-    const actualHeaderY = headerPixelY / canvasScale;
-    const idealCardHeight = Math.max(nw * 0.48, nh * 0.38);
-
-    const cropY = Math.max(0, actualHeaderY - (nh * 0.015));
-    const cropH = Math.min(nh - cropY, idealCardHeight);
-
-    const cropX = nw * 0.020;
-    const cropW = nw * 0.960;
-
-    canvas.width = cropW;
-    canvas.height = cropH;
-
-    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-    return canvas.toDataURL('image/png');
-  } catch (e) {
-    console.error('Crop Error:', e);
-    return null;
-  }
-}
+/* [RETIRED in v1.06.64] cropCardSnapshot */
 
 // Tesseract.js Fast Time Extractor & Visual Card Cropper
 async function processImageWithTesseract(file) {
@@ -5797,14 +5904,7 @@ async function processImageWithTesseract(file) {
 }
 
 // Backwards compatible wrapper for text parsing
-function parseOcrExtractedText(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const mockOcrLines = lines.map((l, i) => ({
-    text: l,
-    bbox: { y0: i * 80 }
-  }));
-  parseOcrExtractedLines(mockOcrLines, null, 1.0);
-}
+/* [RETIRED in v1.06.64] parseOcrExtractedText */
 
 // Bounding-Box Line Parser: Ultra-Fast 100% Robust Time & Mode Extractor
 function parseOcrExtractedLines(ocrLines, sourceImageElement, canvasScale) {
@@ -6326,10 +6426,7 @@ function updateOperationSharePreview() {
   }
 }
 
-function copyAllianceChatFromModal() {
-  copyAllianceChat();
-  closeOperationShareModal();
-}
+/* [RETIRED in v1.06.64] copyAllianceChatFromModal */
 
 // --- Unified Alliance Chat Generators (v1.06.43) ---
 function generateAllianceChatText() {
@@ -6485,45 +6582,167 @@ function switchShareSubTab(tabName) {
 }
 
 
-// --- Global Data Backup & Restore Engine (v1.06.51) ---
-const BACKUP_STORAGE_KEYS = [
-  "wos_alliance_groups_data_v2",
-  "wos_alliance_members",
-  "wos_enemy_presets",
-  "wos_strategy_note",
-  "wos_my_march_time",
-  "wos_calc_history",
-  "wos_enemy_history",
-  "wos_app_settings",
-  "wos_insertion_margin_ms",
-  "wos_simple_audio_muted",
-  "wos_simple_vibration_enabled",
-  "wos_floating_memo_text",
-  "wos_floating_memo_land_time_show",
-  "wos_floating_memo_pos",
-  "wos_keypad_recent_history",
-  "wos_alliance_selection_sort_mode",
-  "wos_alliance_copy_sort_mode",
-  "wos_active_main_tab",
-  "wos_button_theme",
-  "wos_onboarding_completed"
-];
+// --- Global Data Backup & Restore Engine (v1.06.52: Backup Contract Engine) ---
+// チャッピー提案対応: 全20キーの型・セマンティック検証を単一の真実(Descriptor)として一元定義
+const BACKUP_STORAGE_SCHEMA = {
+  wos_alliance_groups_data_v2: {
+    type: 'object',
+    default: JSON.stringify({ activeGroupId: 'default', groups: [{ id: 'default', name: '第1グループ', members: [] }] }),
+    validate: v => typeof v === 'object' && v !== null && !Array.isArray(v) && Array.isArray(v.groups)
+  },
+  wos_alliance_members: {
+    type: 'array',
+    default: '[]',
+    validate: v => Array.isArray(v)
+  },
+  wos_enemy_presets: {
+    type: 'array',
+    default: '[]',
+    validate: v => {
+      if (!Array.isArray(v)) return false;
+      const keysSeen = new Set();
+      for (const p of v) {
+        if (typeof p !== 'object' || p === null) return false;
+        const k = p.id || p.key;
+        if (typeof k !== 'string' || !k) return false;
+        if (keysSeen.has(k)) return false; // 重複キーの完全排除 (Claude指摘対応)
+        keysSeen.add(k);
+      }
+      return true;
+    }
+  },
+  wos_strategy_note: {
+    type: 'string',
+    default: '',
+    validate: v => typeof v === 'string'
+  },
+  wos_my_march_time: {
+    type: 'string',
+    default: '',
+    validate: v => typeof v === 'string'
+  },
+  wos_calc_history: {
+    type: 'array',
+    default: '[]',
+    validate: v => Array.isArray(v)
+  },
+  wos_enemy_history: {
+    type: 'array',
+    default: '[]',
+    validate: v => Array.isArray(v)
+  },
+  wos_app_settings: {
+    type: 'object',
+    default: JSON.stringify({
+      skipSplash: false,
+      stickyHeader: true,
+      showResultMetrics: true,
+      customBg: '',
+      themeBg: '#080c14',
+      themeAccent: '#00f0ff',
+      themeText: '#e6f1ff',
+      buttonTheme: 'neon',
+      hideAdjustButtons: false,
+      cardVisibility: {
+        'header-mini': false,
+        'my-march': false,
+        'enemy-list': false,
+        'result': false,
+        'simple': true,
+        'simple-sub-info': false,
+        'alliance-multi': false,
+        'floating-memo': false
+      }
+    }),
+    validate: v => typeof v === 'object' && v !== null && !Array.isArray(v)
+  },
+  wos_insertion_margin_ms: {
+    type: 'string',
+    default: '0',
+    validate: v => typeof v === 'string'
+  },
+  wos_simple_audio_muted: {
+    type: 'string',
+    default: 'false',
+    validate: v => v === 'true' || v === 'false'
+  },
+  wos_simple_vibration_enabled: {
+    type: 'string',
+    default: 'false',
+    validate: v => v === 'true' || v === 'false'
+  },
+  wos_floating_memo_text: {
+    type: 'string',
+    default: '',
+    validate: v => typeof v === 'string'
+  },
+  wos_floating_memo_land_time_show: {
+    type: 'string',
+    default: 'true',
+    validate: v => v === 'true' || v === 'false'
+  },
+  wos_floating_memo_pos: {
+    type: 'object',
+    default: JSON.stringify({ left: 20, top: 120 }),
+    validate: v => typeof v === 'object' && v !== null && !Array.isArray(v) && typeof v.left === 'number' && typeof v.top === 'number'
+  },
+  wos_keypad_recent_history: {
+    type: 'array',
+    default: '[]',
+    validate: v => Array.isArray(v)
+  },
+  wos_alliance_selection_sort_mode: {
+    type: 'string',
+    default: 'time',
+    validate: v => ['time', 'name'].includes(v)
+  },
+  wos_alliance_copy_sort_mode: {
+    type: 'string',
+    default: 'time',
+    validate: v => ['time', 'name'].includes(v)
+  },
+  wos_active_main_tab: {
+    type: 'string',
+    default: 'single',
+    validate: v => typeof v === 'string'
+  },
+  wos_button_theme: {
+    type: 'string',
+    default: 'neon',
+    validate: v => typeof v === 'string'
+  },
+  wos_onboarding_completed: {
+    type: 'string',
+    default: 'false',
+    validate: v => v === 'true' || v === 'false'
+  }
+};
+window.BACKUP_STORAGE_SCHEMA = BACKUP_STORAGE_SCHEMA;
+
+const BACKUP_STORAGE_KEYS = Object.keys(BACKUP_STORAGE_SCHEMA);
 window.BACKUP_STORAGE_KEYS = BACKUP_STORAGE_KEYS;
 
 function exportAllAppDataJSON() {
   try {
     const backupData = {
-      appVersion: '1.06.51',
-      schemaVersion: 3,
-      version: '1.06.51',
+      appVersion: APP_VERSION,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      version: APP_VERSION,
       appName: 'WOS Insertion Calculator',
       exportedAt: new Date().toISOString(),
       storage: {}
     };
 
+    // チャッピー指摘対応 (P0-1 自己完結型Backup保証):
+    // 未使用・未設定キーであってもスキーマ定義の default 値をシリアライズ出力し、常に厳格20キー完全包含を保証
     BACKUP_STORAGE_KEYS.forEach(k => {
       const val = localStorage.getItem(k);
-      if (val !== null) backupData.storage[k] = val;
+      if (val !== null) {
+        backupData.storage[k] = val;
+      } else {
+        const schemaDef = BACKUP_STORAGE_SCHEMA[k];
+        backupData.storage[k] = (schemaDef && schemaDef.default !== undefined) ? schemaDef.default : '';
+      }
     });
 
     const jsonStr = JSON.stringify(backupData, null, 2);
@@ -6567,7 +6786,6 @@ function handleImportAppDataFile(event) {
       }
 
       // チャッピー・Gemini指摘対応: 未知の未来スキーマバージョン検査 (schemaVersion > 3 は拒絶, 厳格整数チェック)
-      const CURRENT_SCHEMA_VERSION = 3;
       if (parsed.schemaVersion !== undefined && !Number.isInteger(parsed.schemaVersion)) {
         throw new Error('バックアップ設定ファイルの形式が不正です (schemaVersion must be integer)');
       }
@@ -6575,8 +6793,14 @@ function handleImportAppDataFile(event) {
         throw new Error(`未対応の新しいバックアップ形式です (Schema: ${parsed.schemaVersion})。最新版のアプリをご利用ください。`);
       }
 
-      // チャッピー指摘対応 (P1: Pre-validation):
-      // Clean Restore（既存データ消去）前に、含まれる各キーの値型・JSON構造を事前検査
+      // チャッピー指摘対応 (BACKUP-PARTIAL-001): 全20管理キーの完全包含検査（不完全JSONによる既存データ消失防止）
+      const missingKeys = BACKUP_STORAGE_KEYS.filter(k => !(k in parsed.storage));
+      if (missingKeys.length > 0) {
+        throw new Error('バックアップデータに必要な管理キーが不足しています (' + missingKeys.length + '件欠落)。既存データを保護するため復元を中断しました。');
+      }
+
+      // チャッピー指摘対応 (P1: Pre-validation with BACKUP_STORAGE_SCHEMA):
+      // Clean Restore（既存データ消去）前に、含まれる各キーの型・JSON構造およびセマンティック整合性を事前網羅検査
       // 不正なデータ構造が1つでも含まれる場合は既存データを消去せずにエラー中断（自爆防止）
       for (const k of Object.keys(parsed.storage)) {
         if (!BACKUP_STORAGE_KEYS.includes(k)) continue;
@@ -6584,25 +6808,18 @@ function handleImportAppDataFile(event) {
         if (typeof val !== 'string') {
           throw new Error(`ストレージキー [${k}] の値が文字列形式ではありません。`);
         }
-        // JSONオブジェクト形式であるべき主要キーの構文・構造検証
-        if (['wos_enemy_presets', 'wos_enemy_history', 'wos_calc_history', 'wos_keypad_recent_history'].includes(k)) {
-          try {
-            const pVal = JSON.parse(val);
-            if (!Array.isArray(pVal)) {
-              throw new Error(`キー [${k}] は配列データである必要があります。`);
+        const schema = BACKUP_STORAGE_SCHEMA[k];
+        if (schema) {
+          let checkVal = val;
+          if (schema.type === 'array' || schema.type === 'object') {
+            try {
+              checkVal = JSON.parse(val);
+            } catch (e) {
+              throw new Error(`キー [${k}] のJSON解析に失敗しました: ${e.message}`);
             }
-          } catch (e) {
-            throw new Error(`キー [${k}] のJSON解析に失敗しました: ${e.message}`);
           }
-        }
-        if (['wos_alliance_groups_data_v2', 'wos_app_settings', 'wos_floating_memo_pos'].includes(k)) {
-          try {
-            const pVal = JSON.parse(val);
-            if (typeof pVal !== 'object' || pVal === null || Array.isArray(pVal)) {
-              throw new Error(`キー [${k}] はオブジェクトデータである必要があります。`);
-            }
-          } catch (e) {
-            throw new Error(`キー [${k}] のJSON解析に失敗しました: ${e.message}`);
+          if (typeof schema.validate === 'function' && !schema.validate(checkVal)) {
+            throw new Error(`キー [${k}] のデータ構造がスキーマ仕様と不一致です。`);
           }
         }
       }
