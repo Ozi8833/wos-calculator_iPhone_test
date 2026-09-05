@@ -1111,3 +1111,15 @@ body[data-btn-theme="gold"] .btn-toggle-off {
   0% { transform: translateY(0) rotate(-2deg); }
   100% { transform: translateY(-3px) rotate(3deg); }
 }
+
+/* Touch-action optimization: Eliminate double-tap zoom delay & WebKit media stream stalls (v1.06.74) */
+button, .btn-game, input, select, .nav-item {
+  touch-action: manipulation;
+}
+
+/* PiP Active Glowing Button State */
+#btn-start-pip.pip-active {
+  background: linear-gradient(135deg, #059669, #10b981) !important;
+  border-color: #34d399 !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.6) !important;
+}

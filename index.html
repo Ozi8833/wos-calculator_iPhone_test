@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ホワサバ 差し込み計算＆マルチ行軍トラッカー (v1.06.66 βテスト版)</title>
+  <title>ホワサバ 差し込み計算＆マルチ行軍トラッカー (v1.06.74 βテスト版)</title>
   <meta name="description" content="Whiteout Survival(ホワサバ) 0.1秒精度 差し込み計算＆マルチ行軍トラッカー">
   <meta name="theme-color" content="#00f0ff">
   
@@ -13,7 +13,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=1.06.66">
+  <link rel="stylesheet" href="style.css?v=1.06.74">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
         <!-- Top Title Header (Above Image Artwork) -->
         <div class="splash-top-header mb-2">
           <h1 class="splash-title-text">⚔️ WHITEOUT SURVIVAL</h1>
-          <p class="splash-subtitle-text">差し込み計算 ＆ シングル/同盟一斉統合モード v1.06.66 βテスト版</p>
+          <p class="splash-subtitle-text">差し込み計算 ＆ シングル/同盟一斉統合モード v1.06.74 βテスト版</p>
         </div>
 
         <!-- Square Artwork Container -->
@@ -43,14 +43,14 @@
     </div>
 
     <!-- Main Header Bar (Sticky Top - v1.03.31 2-Row Top Title & Version Layout) -->
-        <!-- Modern Slim Sticky Header (v1.06.66) -->
+        <!-- Modern Slim Sticky Header (v1.06.73) -->
     <header id="main-header" class="sticky-header">
       <!-- 1st Row: Slim Title & Quick Controls -->
       <div class="flex items-center justify-between gap-2 px-1 pb-1 border-b border-cyan-500/20">
         <div class="flex items-center gap-1.5">
           <i class="fa-solid fa-shield-halved text-cyan-400 text-base"></i>
           <span class="font-black text-cyan-400 text-sm sm:text-base tracking-wide whitespace-nowrap">WOS 差込計算</span>
-          <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 shadow">v1.06.66</span>
+          <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 shadow">v1.06.73</span>
         </div>
         
         <div class="flex items-center gap-1">
@@ -82,7 +82,7 @@
       </div>
     </header>
 
-    <!-- Dedicated Clock Adjustment Modal (v1.06.66 Standalone Focus) -->
+    <!-- Dedicated Clock Adjustment Modal (v1.06.73 Standalone Focus) -->
     <div id="clock-adjust-modal" class="modal-backdrop">
       <div class="modal-body max-w-sm bg-black/95 border-2 border-cyan-400/90 rounded-2xl shadow-2xl p-4 space-y-3.5 text-center">
         <div class="flex justify-between items-center border-b border-cyan-500/40 pb-2">
@@ -179,7 +179,7 @@
     </div>
 
     <!-- Mode v1.02.04 Trial: Super Simple Launch Mode Card (Status Mode Toggle: Rally / March) -->
-    <!-- Main Content Area (v1.06.66) -->
+    <!-- Main Content Area (v1.06.73) -->
     
     <!-- ==================== TAB 1: 個人（シングルモード特化） ==================== -->
     <div id="tab-content-single" class="tab-content-view space-y-3">
@@ -250,6 +250,12 @@
         <button id="btn-simple-enemy-start" class="btn-game w-full py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-base sm:text-lg rounded-xl shadow-xl shadow-orange-500/30 flex items-center justify-center gap-2 transform active:scale-98 transition-all" onclick="triggerSimpleEnemyLaunch()">
           <i class="fa-solid fa-calculator text-lg"></i>
           <span>差し込み計算スタート！</span>
+        </button>
+
+        <!-- 📺 最前面小窓タイマー (PiP) 専用起動ボタン (3大AI完全合意ワンタップ設計) -->
+        <button id="btn-start-pip" class="btn-game w-full py-2.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-cyan-700 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-sm rounded-xl shadow-lg border border-cyan-400/50 flex items-center justify-center gap-2 transform active:scale-98 transition-all" onclick="togglePictureInPictureTimer()">
+          <i class="fa-solid fa-tv text-cyan-200"></i>
+          <span id="pip-btn-label">📺 最前面小窓タイマー (PiP) を開く</span>
         </button>
 
         <!-- 4. Result Display Panel -->
@@ -470,7 +476,7 @@
 
 
   <!-- Bottom Navigation Bar -->
-    <!-- Modern 5-Hub Bottom Navigation Bar (v1.06.66) -->
+    <!-- Modern 5-Hub Bottom Navigation Bar (v1.06.73) -->
   <nav class="bottom-nav">
     <button class="nav-item active" id="nav-tab-single" onclick="switchMainTab('single')">
       <i class="fa-solid fa-user text-lg text-cyan-400"></i>
@@ -490,7 +496,7 @@
     </button>
   </nav>
 
-  <!-- Modern Operation Share & Timeline Hub Modal (v1.06.66 Plan A) -->
+  <!-- Modern Operation Share & Timeline Hub Modal (v1.06.73 Plan A) -->
   <div id="operation-share-modal" class="modal-backdrop !items-start !pt-5 sm:!pt-8" style="align-items: flex-start !important; padding-top: 20px !important;">
     <div class="modal-body max-w-lg w-[96vw] max-h-[90vh] flex flex-col bg-black/95 border-2 border-amber-500/80 rounded-2xl shadow-2xl p-3.5 space-y-2.5 text-xs !mt-0" style="margin-top: 0 !important; align-self: flex-start !important;">
       
@@ -598,7 +604,7 @@
     </div>
   </div>
 
-  <!-- Triple Mode Calculator Modal (v1.06.66 Exact Fixed Height matching Converter/Speedup) -->
+  <!-- Triple Mode Calculator Modal (v1.06.73 Exact Fixed Height matching Converter/Speedup) -->
   <div id="calc-modal" class="modal-backdrop">
     <div class="modal-body max-w-md w-[96vw] h-[660px] max-h-[85vh] flex flex-col p-3.5 space-y-2 text-xs bg-slate-900 border-2 border-cyan-400/90 rounded-2xl shadow-2xl">
       <!-- Fixed Header: Top Tab Switchers (Strict 1-Row Grid Layout) -->
@@ -857,7 +863,7 @@
   <div id="settings-modal" class="modal-backdrop">
     <div class="modal-body">
       <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-bold text-cyan-400"><i class="fa-solid fa-gear mr-2"></i> アプリ設定 (v1.06.66 βテスト版)</h3>
+        <h3 class="text-lg font-bold text-cyan-400"><i class="fa-solid fa-gear mr-2"></i> アプリ設定 (v1.06.73 βテスト版)</h3>
         <button class="text-gray-400 text-xl font-bold p-1" onclick="closeSettingsModal()">&times;</button>
       </div>
 
@@ -910,7 +916,7 @@
           <input type="checkbox" id="setting-vibration" class="w-5 h-5 accent-cyan-400" checked onchange="handleSettingVibrationChange(this.checked)">
         </div>
 
-        <!-- 🎯 Insertion Margin Offset Selection (+0.1s / +0.3s / +0.5s) (v1.06.66) -->
+        <!-- 🎯 Insertion Margin Offset Selection (+0.1s / +0.3s / +0.5s) (v1.06.73) -->
         <div class="border-b border-gray-700 pb-3">
           <div class="flex justify-between items-center mb-1.5">
             <label class="font-bold text-amber-300 flex items-center gap-1.5 text-xs sm:text-sm">
@@ -959,7 +965,7 @@
 
 
         
-        <!-- 💾 Global Backup & Restore (v1.06.66) -->
+        <!-- 💾 Global Backup & Restore (v1.06.73) -->
         <div class="bg-black/60 p-3 rounded-xl border border-cyan-500/40 space-y-2 mt-2">
           <div class="flex justify-between items-center">
             <label class="font-bold text-cyan-300 flex items-center gap-1.5 text-xs sm:text-sm">
@@ -1268,7 +1274,7 @@
   </div>
 
   
-    <!-- Dedicated Remaining Time Quick Adjust Modal (v1.06.66) -->
+    <!-- Dedicated Remaining Time Quick Adjust Modal (v1.06.73) -->
     <div id="rem-time-adjust-modal" class="modal-backdrop">
       <div class="modal-body max-w-sm bg-black/95 border-2 border-yellow-400/90 rounded-2xl shadow-2xl p-4 space-y-3.5 text-center">
         <div class="flex justify-between items-center border-b border-yellow-500/40 pb-2">
@@ -1331,7 +1337,7 @@
 
   
   
-  <!-- Comprehensive Help Guide Modal (v1.06.66 All ? Descriptions Integrated) -->
+  <!-- Comprehensive Help Guide Modal (v1.06.73 All ? Descriptions Integrated) -->
   <div id="help-guide-modal" class="modal-backdrop">
     <div class="modal-body max-w-lg bg-black/95 border-2 border-cyan-400/90 rounded-2xl shadow-2xl p-4 space-y-3.5 text-xs">
       <div class="flex justify-between items-center border-b border-cyan-500/40 pb-2">
@@ -1636,10 +1642,10 @@
   </div>
 
 
-  <!-- v1.06.66: Screenshot OCR Result Preview & Multi-Target Selection Modal -->
+  <!-- v1.06.73: Screenshot OCR Result Preview & Multi-Target Selection Modal -->
   <div id="ocr-preview-modal" class="modal-backdrop !items-start !pt-3 !pb-20" style="z-index: 100010; align-items: flex-start !important; padding-top: 12px !important; padding-bottom: 84px !important;">
     <div class="modal-body max-w-lg w-[98vw] sm:w-[96vw] max-h-[calc(100vh-64px)] flex flex-col bg-black/95 border-2 border-cyan-400/90 rounded-2xl shadow-2xl p-2.5 space-y-1.5 !mt-0" style="margin-top: 0 !important; align-self: flex-start !important;">
-      <!-- Compact Modal Header (v1.06.66 Maximized Viewport) -->
+      <!-- Compact Modal Header (v1.06.73 Maximized Viewport) -->
       <div class="flex justify-between items-center border-b border-cyan-500/40 pb-1.5">
         <div class="font-black text-cyan-300 text-xs sm:text-sm flex items-center gap-1.5">
           <i class="fa-solid fa-wand-magic-sparkles text-yellow-300"></i>
@@ -1678,7 +1684,7 @@
         </div>
 
         
-        <!-- ✍️ Manual Direct Input / Correction Toggle Button & Card (v1.06.66) -->
+        <!-- ✍️ Manual Direct Input / Correction Toggle Button & Card (v1.06.73) -->
         <div id="ocr-manual-section" class="space-y-1.5">
           <!-- Toggle Button (Shown when collapsed) -->
           <button id="ocr-manual-toggle-btn" type="button" class="w-full py-1.5 px-3 rounded-xl border border-amber-500/60 bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 font-bold text-xs flex items-center justify-between transition-all" onclick="toggleOcrManualSection()">
@@ -1735,13 +1741,13 @@
   </div>
 
   <!-- Custom JS -->
-  <script src="app.js?v=1.06.66"></script>
+  <script src="app.js?v=1.06.74"></script>
 
-    <!-- Floating Toast / Snackbar Notification (v1.06.66) -->
+    <!-- Floating Toast / Snackbar Notification (v1.06.73) -->
     <div id="toast-container" style="position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 9999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;"></div>
   
 
-  <!-- 🔰 Interactive Onboarding Tour Overlay & Yan-chan Dialog (v1.06.66) -->
+  <!-- 🔰 Interactive Onboarding Tour Overlay & Yan-chan Dialog (v1.06.73) -->
   <div id="onboarding-overlay" class="hidden">
     <!-- SVG Mask with transparent cutout hole -->
     <svg id="onboarding-svg-mask" xmlns="http://www.w3.org/2000/svg">
@@ -1786,6 +1792,10 @@
       </div>
     </div>
   </div>
+
+  <!-- 📺 PiP (Picture-in-Picture) 描画用非表示Canvas & 極小Video要素 (v1.06.74) -->
+  <canvas id="pip-canvas" width="480" height="240" style="display: none;"></canvas>
+  <video id="pip-video" playsinline muted autoplay style="position: fixed; bottom: 0; right: 0; width: 2px; height: 2px; opacity: 0.05; pointer-events: none; z-index: -1;"></video>
 
 </body>
 </html>

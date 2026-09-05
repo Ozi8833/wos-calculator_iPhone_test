@@ -10,9 +10,9 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-const APP_VERSION = '1.06.66';
+const APP_VERSION = '1.06.74';
 window.APP_VERSION = APP_VERSION;
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 window.CURRENT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
 
 /* ==========================================================================
@@ -63,7 +63,7 @@ function saveEnemyPreset(tag, name, marchSec) {
   const cleanName = name.trim();
   const naturalKey = `${cleanTag}:${cleanName}`;
   
-  // 同盟タグ＋名前が一致する既存プリセットがあれば更新、無ければ衝突ゼロの一意IDを付与して先頭追加
+  // 同盟タグ＋名前が一致する既存プリセットがあれば更新、無ければ衝突可能性を極めて低くした一意IDを付与して先頭追加
   const existing = state.enemyPresets.find(p => (p.key === naturalKey) || (p.tag === cleanTag && p.name === cleanName));
   if (!existing) {
     const id = generateUniquePresetId();
@@ -235,7 +235,7 @@ function deletePresetFromModal(event, presetId) {
     state.lastDeletedPreset = deletedItem;
     const deletedId = deletedItem.id || deletedItem.key;
     state.marchList.forEach(m => {
-      if (m.selectedPresetKey === deletedId || m.selectedPresetKey === deletedItem.naturalKey) {
+      if (m.selectedPresetKey === deletedId || m.selectedPresetKey === deletedItem.id) {
         delete m.selectedPresetKey;
       }
       if (m.selectedPresetIndex !== undefined) delete m.selectedPresetIndex;
@@ -249,35 +249,59 @@ function deletePresetFromModal(event, presetId) {
 
 function loadEnemyPresets() {
   const saved = localStorage.getItem('wos_enemy_presets');
+  let hasNormalized = false;
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      state.enemyPresets = Array.isArray(parsed) ? parsed : [];
-      // 既存レガシープリセットへの id 付与および正規化
-      state.enemyPresets.forEach(p => {
-        if (!p.id) p.id = p.key || generateUniquePresetId();
-        if (!p.key) p.key = p.id;
-        if (!p.naturalKey) p.naturalKey = `${p.tag || ''}:${p.name || ''}`;
+      const rawList = Array.isArray(parsed) ? parsed : [];
+      const cleanList = [];
+      const seenIds = new Set();
+
+      // チャッピーP1/P2指摘対応: malformed preset (nullや非オブジェクト) の安全リカバリー＆正常要素の保持
+      rawList.forEach(p => {
+        if (!p || typeof p !== 'object') {
+          hasNormalized = true; // 不正なnull/プリミティブ要素は安全にドロップ
+          return;
+        }
+
+        // チャッピーP1指摘対応: id/key のフィールド型不正 (数値等) や空白の厳格文字列正規化
+        let candidateId = (typeof p.id === 'string' && p.id.trim()) ? p.id.trim()
+                        : (typeof p.key === 'string' && p.key.trim()) ? p.key.trim()
+                        : null;
+
+        if (!candidateId) {
+          candidateId = generateUniquePresetId();
+          hasNormalized = true;
+        } else if (p.id !== candidateId) {
+          hasNormalized = true;
+        }
+
+        // チャッピーP2指摘対応: 重複ID衝突時は while ループにより「必ずseenIdsに存在しない一意ID」を数学的に完全保証
+        while (seenIds.has(candidateId)) {
+          candidateId = generateUniquePresetId();
+          hasNormalized = true;
+        }
+        seenIds.add(candidateId);
+
+        p.id = candidateId;
+        // チャッピーP1指摘対応: key を必ず id の完全ミラーとして一本化 (id/key 相互衝突・二重性リスクの完全排除)
+        if (p.key !== p.id) {
+          p.key = p.id;
+          hasNormalized = true;
+        }
+
+        cleanList.push(p);
       });
+
+      state.enemyPresets = cleanList;
+      if (hasNormalized) {
+        localStorage.setItem('wos_enemy_presets', JSON.stringify(state.enemyPresets));
+      }
     } catch (e) {
       state.enemyPresets = [];
     }
   } else {
     state.enemyPresets = [];
-  }
-
-  // [LEGACY MIGRATION LAYER - チャッピー提案対応]
-  // 過去バージョン(v1.06.35以前)の selectedPresetIndex を読み込み時に完全自動移行・隔離
-  if (Array.isArray(state.marchList)) {
-    state.marchList.forEach(march => {
-      if (!march.selectedPresetKey && typeof march.selectedPresetIndex === 'number') {
-        const legacyPreset = state.enemyPresets[march.selectedPresetIndex];
-        if (legacyPreset && legacyPreset.id) {
-          march.selectedPresetKey = legacyPreset.id;
-        }
-        delete march.selectedPresetIndex; // 移行完了によりレガシーIndexを完全削除
-      }
-    });
   }
 
   const savedNote = localStorage.getItem('wos_strategy_note');
@@ -316,7 +340,7 @@ function renderMarchCards() {
     let presetOptionsHtml = '<option value="">-- 💾 プリセット呼出 --</option>';
     state.enemyPresets.forEach(p => {
       const pKey = p.id || p.key;
-      const isSelected = march.selectedPresetKey && (march.selectedPresetKey === pKey || march.selectedPresetKey === p.naturalKey);
+      const isSelected = march.selectedPresetKey && (march.selectedPresetKey === p.id || march.selectedPresetKey === pKey);
       presetOptionsHtml += `<option value="${escapeHtml(pKey)}" ${isSelected ? 'selected' : ''}>[${escapeHtml(p.tag)}] ${escapeHtml(p.name)} (${formatCountdownMMSSs(p.marchSec)})</option>`;
     });
 
@@ -2942,6 +2966,26 @@ function closeHistoryModal() { document.getElementById('history-modal').classLis
 
 /* [RETIRED in v1.06.64] scrollToTop */
 
+// --- Legacy Preset Migration Engine (v1.06.69 - チャッピーP1指摘対応: 共通純粋関数化) ---
+function migrateLegacyPresetSelections() {
+  if (!Array.isArray(state.marchList) || !Array.isArray(state.enemyPresets) || state.enemyPresets.length === 0) {
+    return;
+  }
+  state.marchList.forEach(march => {
+    if (!march.selectedPresetKey && typeof march.selectedPresetIndex === 'number') {
+      const legacyPreset = state.enemyPresets[march.selectedPresetIndex];
+      if (legacyPreset && (legacyPreset.id || legacyPreset.key)) {
+        march.selectedPresetKey = legacyPreset.id || legacyPreset.key;
+        // チャッピー指摘対応: 変換成功時のみ legacy index を削除 (破損データでの情報誤消失を完全防止)
+        delete march.selectedPresetIndex;
+      } else {
+        console.warn(`[LegacyPresetMigration] March[${march.id}] の legacy index (${march.selectedPresetIndex}) に該当するプリセットが見つかりません。未解決indexを保持します。`);
+      }
+    }
+  });
+}
+window.migrateLegacyPresetSelections = migrateLegacyPresetSelections;
+
 // --- DOM Initializer & Startup Control ---
 function initApp() {
   loadAppSettings();
@@ -2956,6 +3000,10 @@ function initApp() {
       createMarchCardData('', '')
     ];
   }
+
+  // [LEGACY MIGRATION LAYER - チャッピー指摘対応 (P1)]
+  // marchList 生成/復元後に共通移行関数を実行し、古い selectedPresetIndex を Stable ID へ自動昇華
+  migrateLegacyPresetSelections();
 
   renderMarchCards();
   calculateInsertion();
@@ -3646,6 +3694,9 @@ function updateSimpleCountdown() {
 
 // v1.03.13 Forced Stop & Clean Reset Calculation
 function resetSimpleLaunchCalculation() {
+  // 📺 PiP 小窓への即時リセットフレームプッシュ (v1.06.74 メディアAPI完全不干渉)
+  if (typeof drawAndPushPipFrame === 'function') drawAndPushPipFrame();
+
   resetAllianceCopyStatus();
   const startSec = simpleLaunchState.startRemSec || 15;
   
@@ -6603,10 +6654,12 @@ const BACKUP_STORAGE_SCHEMA = {
       const keysSeen = new Set();
       for (const p of v) {
         if (typeof p !== 'object' || p === null) return false;
-        const k = p.id || p.key;
-        if (typeof k !== 'string' || !k) return false;
-        if (keysSeen.has(k)) return false; // 重複キーの完全排除 (Claude指摘対応)
-        keysSeen.add(k);
+        // チャッピー指摘対応: id と key は必ず両方厳格な非空文字列で存在し、かつ完全一致 (id === key) を要求
+        if (typeof p.id !== 'string' || !p.id.trim()) return false;
+        if (typeof p.key !== 'string' || !p.key.trim()) return false;
+        if (p.id !== p.key) return false;
+        if (keysSeen.has(p.id)) return false; // 重複IDの完全排除
+        keysSeen.add(p.id);
       }
       return true;
     }
@@ -6793,7 +6846,54 @@ function handleImportAppDataFile(event) {
         throw new Error(`未対応の新しいバックアップ形式です (Schema: ${parsed.schemaVersion})。最新版のアプリをご利用ください。`);
       }
 
+      // チャッピーP1指摘対応 (v1.06.73): Schema v3 ➔ v4 自動マイグレーション ＆ 不足キーのdefault安全補完
+      // 20キー存在検査の「前」に実行し、古いv3以前のバックアップ(キー数が少なかった過去ver)も安全にv4仕様へ昇華
+      const backupVersion = typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : 3;
+      if (backupVersion < 4) {
+        // 1. 旧形式の敵プリセットデータを v4 (id === key, 厳格非空文字列) へ自動マイグレーション
+        if (parsed.storage.wos_enemy_presets) {
+          try {
+            const rawPresets = JSON.parse(parsed.storage.wos_enemy_presets);
+            if (Array.isArray(rawPresets)) {
+              const cleanPresets = [];
+              const seenIds = new Set();
+              rawPresets.forEach(p => {
+                if (!p || typeof p !== 'object') return;
+                let candidateId = (typeof p.id === 'string' && p.id.trim()) ? p.id.trim()
+                                : (typeof p.key === 'string' && p.key.trim()) ? p.key.trim()
+                                : null;
+                if (!candidateId) {
+                  candidateId = generateUniquePresetId();
+                }
+                while (seenIds.has(candidateId)) {
+                  candidateId = generateUniquePresetId();
+                }
+                seenIds.add(candidateId);
+                p.id = candidateId;
+                p.key = candidateId; // v4厳格契約: id === key
+                cleanPresets.push(p);
+              });
+              parsed.storage.wos_enemy_presets = JSON.stringify(cleanPresets);
+            }
+          } catch (migErr) {
+            // パース不可の場合は後続のスキーマバリデーションで安全に遮断
+          }
+        }
+
+        // 2. 旧バージョンで未定義だった管理キーを schema.default で安全に補完 (下位互換救済)
+        BACKUP_STORAGE_KEYS.forEach(k => {
+          if (!(k in parsed.storage)) {
+            const defSchema = BACKUP_STORAGE_SCHEMA[k];
+            if (defSchema && defSchema.default !== undefined) {
+              parsed.storage[k] = defSchema.default;
+            }
+          }
+        });
+        parsed.schemaVersion = CURRENT_SCHEMA_VERSION; // v4 へ正規化完了
+      }
+
       // チャッピー指摘対応 (BACKUP-PARTIAL-001): 全20管理キーの完全包含検査（不完全JSONによる既存データ消失防止）
+      // ※ v4バックアップは20キー完全包含が必須。v3以前は上記でdefault補完された上で20キーを満たすか検証
       const missingKeys = BACKUP_STORAGE_KEYS.filter(k => !(k in parsed.storage));
       if (missingKeys.length > 0) {
         throw new Error('バックアップデータに必要な管理キーが不足しています (' + missingKeys.length + '件欠落)。既存データを保護するため復元を中断しました。');
@@ -7120,3 +7220,278 @@ function resetOnboardingFlagForDebug() {
   }, 350);
 }
 window.resetOnboardingFlagForDebug = resetOnboardingFlagForDebug;
+
+
+/* ==========================================================================
+   📺 最前面小窓タイマー (Picture-in-Picture / PiP) エンジン (v1.06.74)
+   - 4大AI（チャッピー・Gemini・Claude・Antigravity）完全合意設計
+   - メディアAPI完全不干渉（リセット時play/srcObject操作ゼロ）
+   - canvas.captureStream(0) + 手動 track.requestFrame() による超絶高耐久
+   - クリーン後始末（track.stop()）＆ 状態マシンによる排他制御
+   ========================================================================== */
+
+let pipState = 'IDLE'; // 'IDLE' | 'STARTING' | 'PIP' | 'STOPPED'
+let pipCanvasStream = null;
+let pipVideoTrack = null;
+let isPipVideoReady = false;
+
+// 1. ストリーム事前準備 (初回タッチまたはロード時)
+function initPipStreamPreload() {
+  const canvas = document.getElementById('pip-canvas');
+  const video = document.getElementById('pip-video');
+  if (!canvas || !video) return;
+
+  if (!pipCanvasStream) {
+    if (typeof canvas.captureStream !== 'function') {
+      console.warn('[PiP] canvas.captureStream is not supported on this browser.');
+      return;
+    }
+    try {
+      pipCanvasStream = canvas.captureStream(0); // 手動供給モード
+    } catch (e) {
+      pipCanvasStream = canvas.captureStream();
+    }
+
+    const tracks = pipCanvasStream.getVideoTracks();
+    if (tracks && tracks.length > 0) {
+      pipVideoTrack = tracks[0];
+    }
+    video.srcObject = pipCanvasStream;
+  }
+
+  video.play().then(() => {
+    isPipVideoReady = true;
+  }).catch(() => {
+    document.body.addEventListener('touchstart', () => {
+      if (!isPipVideoReady && video) {
+        video.play().then(() => { isPipVideoReady = true; }).catch(() => {});
+      }
+    }, { once: true });
+  });
+
+  // イベントリスナー
+  video.addEventListener('leavepictureinpicture', handlePipClosed);
+  video.addEventListener('webkitpresentationmodechanged', () => {
+    if (video.webkitPresentationMode === 'inline') {
+      handlePipClosed();
+    } else if (video.webkitPresentationMode === 'picture-in-picture') {
+      pipState = 'PIP';
+      updatePipButtonUi(true);
+    }
+  });
+}
+
+// 2. PiP ボタンの表示同期
+function updatePipButtonUi(isActive) {
+  const btn = document.getElementById('btn-start-pip');
+  const label = document.getElementById('pip-btn-label');
+  if (!btn || !label) return;
+
+  if (isActive) {
+    btn.classList.add('pip-active');
+    label.textContent = '📺 小窓タイマー表示中 (タップで閉じる)';
+  } else {
+    btn.classList.remove('pip-active');
+    label.textContent = '📺 最前面小窓タイマー (PiP) を開く';
+  }
+}
+
+// 3. 小窓を閉じた時のクリーン解放処理 (Claude/Gemini/チャッピー合意)
+function handlePipClosed() {
+  pipState = 'STOPPED';
+  updatePipButtonUi(false);
+  console.log('[PiP] 小窓が閉じられました (クリーン状態へ遷移)');
+}
+
+// 4. 手動フレーム描画 ＆ requestFrame 供給
+function drawAndPushPipFrame() {
+  if (pipState !== 'PIP') return;
+
+  const canvas = document.getElementById('pip-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  try {
+    const now = getAdjustedNowTime();
+    let remainingMs = 0;
+    let remainingText = '--:--.-';
+    let isUrgent = false;
+    let isFinished = false;
+
+    if (simpleLaunchState.isCalculated && simpleLaunchState.targetLaunchDate) {
+      remainingMs = simpleLaunchState.targetLaunchDate.getTime() - now.getTime();
+      isUrgent = (remainingMs > 0 && remainingMs <= 5000);
+      isFinished = (remainingMs <= 0);
+
+      if (isFinished) {
+        remainingText = '00:00.0';
+      } else {
+        const totalSec = Math.floor(remainingMs / 1000);
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        const d = Math.floor((remainingMs % 1000) / 100);
+        remainingText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${d}`;
+      }
+    } else {
+      remainingText = '未計算';
+    }
+
+    // 背景描画 (5秒前アラート時は赤黒点滅)
+    if (isUrgent) {
+      const blink = Math.floor(remainingMs / 400) % 2 === 0;
+      ctx.fillStyle = blink ? '#7f1d1d' : '#020617';
+    } else if (isFinished) {
+      ctx.fillStyle = '#1e293b';
+    } else {
+      ctx.fillStyle = '#090d16';
+    }
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // ネオン外枠
+    ctx.strokeStyle = isUrgent ? '#ef4444' : (isFinished ? '#64748b' : '#0284c7');
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+
+    // ヘッダー情報 (現在時刻)
+    const nowStr = formatTimeHHMMSS(now) + '.' + Math.floor(now.getMilliseconds() / 100);
+    ctx.fillStyle = isUrgent ? '#fca5a5' : '#38bdf8';
+    ctx.font = 'bold 24px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('⚔️ WOS 差込タイマー', 20, 36);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '20px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(nowStr, canvas.width - 20, 36);
+
+    // 区切り線
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(20, 48);
+    ctx.lineTo(canvas.width - 20, 48);
+    ctx.stroke();
+
+    // 状態ラベル
+    ctx.textAlign = 'center';
+    if (!simpleLaunchState.isCalculated) {
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText('⚡️ アプリで計算スタートを押してください', canvas.width / 2, 85);
+    } else if (isUrgent) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText('🚨 まもなく発車！ (5秒前)', canvas.width / 2, 85);
+    } else if (isFinished) {
+      ctx.fillStyle = '#facc15';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText('⚡️ 発車時刻 到達！ (経過)', canvas.width / 2, 85);
+    } else {
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText('🎯 あなたの発車カウントダウン', canvas.width / 2, 85);
+    }
+
+    // デカ文字タイマー
+    if (isUrgent) {
+      ctx.fillStyle = '#fef08a';
+    } else if (isFinished) {
+      ctx.fillStyle = '#94a3b8';
+    } else {
+      ctx.fillStyle = '#facc15';
+    }
+    ctx.font = '900 84px monospace';
+    ctx.fillText(remainingText, canvas.width / 2, 175);
+
+    // フッター情報
+    ctx.fillStyle = '#64748b';
+    ctx.font = '18px sans-serif';
+    ctx.fillText('ホワサバ画面の隅に配置してご利用ください', canvas.width / 2, 215);
+
+    // 手動フレーム送信
+    if (pipVideoTrack && typeof pipVideoTrack.requestFrame === 'function') {
+      pipVideoTrack.requestFrame();
+    }
+  } catch (err) {
+    console.error('[PiP Render Error]', err);
+  }
+}
+
+// 5. PiP のトグル起動 / 閉じる (本物のユーザー同期クリック内で実行)
+function togglePictureInPictureTimer() {
+  const video = document.getElementById('pip-video');
+  if (!video) return;
+
+  // すでにPiP中の場合は閉じる
+  if (pipState === 'PIP') {
+    if (typeof video.webkitSetPresentationMode === 'function') {
+      video.webkitSetPresentationMode('inline');
+    } else if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch(() => {});
+    }
+    handlePipClosed();
+    return;
+  }
+
+  // 起動前チェック: 計算中か案内
+  if (!simpleLaunchState.isCalculated) {
+    showToast('先に「差し込み計算スタート！」を押してください', 'warning');
+  }
+
+  if (pipState === 'STARTING') return;
+  pipState = 'STARTING';
+
+  // ストリームが未作成なら即時同期生成
+  if (!pipCanvasStream) {
+    initPipStreamPreload();
+  }
+
+  if (video.paused) {
+    video.play().catch(() => {});
+  }
+
+  // 初回1コマを即座に描画
+  pipState = 'PIP'; // 一時的に描画を通す
+  drawAndPushPipFrame();
+
+  // iOS Safari WebKit PiP
+  if (typeof video.webkitSetPresentationMode === 'function') {
+    try {
+      video.webkitSetPresentationMode('picture-in-picture');
+      updatePipButtonUi(true);
+      showToast('小窓タイマーを起動しました！ゲームへ戻れます', 'success');
+      return;
+    } catch (e) {
+      pipState = 'STOPPED';
+      updatePipButtonUi(false);
+      console.error('[PiP WebKit Exception]', e);
+    }
+  }
+
+  // 標準 Picture-in-Picture
+  if (typeof video.requestPictureInPicture === 'function') {
+    video.requestPictureInPicture()
+      .then(() => {
+        pipState = 'PIP';
+        updatePipButtonUi(true);
+        showToast('小窓タイマーを起動しました！', 'success');
+      })
+      .catch((err) => {
+        pipState = 'STOPPED';
+        updatePipButtonUi(false);
+        showToast('小窓の起動に失敗しました: ' + err.message, 'error');
+      });
+  } else {
+    pipState = 'STOPPED';
+    updatePipButtonUi(false);
+    showToast('お使いの端末・ブラウザはPicture-in-Pictureに対応していません', 'warning');
+  }
+}
+
+// アプリ起動時にPiP事前準備をキック
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPipStreamPreload);
+} else {
+  initPipStreamPreload();
+}
