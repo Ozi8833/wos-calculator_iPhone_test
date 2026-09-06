@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ホワサバ 差し込み計算＆マルチ行軍トラッカー (v1.06.75 βテスト版)</title>
+  <title>ホワサバ 差し込み計算＆マルチ行軍トラッカー (v1.06.76 βテスト版)</title>
   <meta name="description" content="Whiteout Survival(ホワサバ) 0.1秒精度 差し込み計算＆マルチ行軍トラッカー">
   <meta name="theme-color" content="#00f0ff">
   
@@ -13,7 +13,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=1.06.75">
+  <link rel="stylesheet" href="style.css?v=1.06.76">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
         <!-- Top Title Header (Above Image Artwork) -->
         <div class="splash-top-header mb-2">
           <h1 class="splash-title-text">⚔️ WHITEOUT SURVIVAL</h1>
-          <p class="splash-subtitle-text">差し込み計算 ＆ シングル/同盟一斉統合モード v1.06.75 βテスト版</p>
+          <p class="splash-subtitle-text">差し込み計算 ＆ シングル/同盟一斉統合モード v1.06.76 βテスト版</p>
         </div>
 
         <!-- Square Artwork Container -->
@@ -50,7 +50,7 @@
         <div class="flex items-center gap-1.5">
           <i class="fa-solid fa-shield-halved text-cyan-400 text-base"></i>
           <span class="font-black text-cyan-400 text-sm sm:text-base tracking-wide whitespace-nowrap">WOS 差込計算</span>
-          <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 shadow">v1.06.75</span>
+          <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 shadow">v1.06.76</span>
         </div>
         
         <div class="flex items-center gap-1">
@@ -246,17 +246,17 @@
 
         </div>
 
-        <!-- 3. Main Action Button (Highest Contrast) -->
-        <button id="btn-simple-enemy-start" class="btn-game w-full py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-base sm:text-lg rounded-xl shadow-xl shadow-orange-500/30 flex items-center justify-center gap-2 transform active:scale-98 transition-all" onclick="triggerSimpleEnemyLaunch()">
-          <i class="fa-solid fa-calculator text-lg"></i>
-          <span>差し込み計算スタート！</span>
-        </button>
-
-        <!-- 📺 最前面小窓タイマー (PiP) 専用起動ボタン (3大AI完全合意ワンタップ設計) -->
-        <button id="btn-start-pip" class="btn-game w-full py-2.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-cyan-700 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-sm rounded-xl shadow-lg border border-cyan-400/50 flex items-center justify-center gap-2 transform active:scale-98 transition-all" onclick="togglePictureInPictureTimer()">
-          <i class="fa-solid fa-tv text-cyan-200"></i>
-          <span id="pip-btn-label">📺 最前面小窓タイマー (PiP) を開く</span>
-        </button>
+        <!-- 3. Main Action Button & Compact PiP Trigger (Horizontal Row: Saves ~50px Vertical Space) -->
+        <div class="flex gap-2 items-stretch">
+          <button id="btn-simple-enemy-start" class="btn-game flex-1 py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm sm:text-base rounded-xl shadow-xl shadow-orange-500/30 flex items-center justify-center gap-1.5 transform active:scale-98 transition-all" onclick="triggerSimpleEnemyLaunch()">
+            <i class="fa-solid fa-calculator text-base sm:text-lg"></i>
+            <span class="whitespace-nowrap">差し込み計算スタート！</span>
+          </button>
+          <button id="btn-start-pip" class="btn-game w-24 sm:w-28 py-3.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-cyan-700 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg border border-cyan-400/50 flex items-center justify-center gap-1.5 transform active:scale-98 transition-all flex-shrink-0" onclick="togglePictureInPictureTimer()" title="最前面小窓タイマー(PiP)を開く/閉じる">
+            <i class="fa-solid fa-tv text-cyan-200"></i>
+            <span id="pip-btn-label" class="whitespace-nowrap">小窓</span>
+          </button>
+        </div>
 
         <!-- 4. Result Display Panel -->
         <div id="simple-result-box" class="bg-black/90 p-3.5 rounded-xl border-2 border-yellow-500/60 space-y-2 text-center shadow-2xl">
@@ -1741,7 +1741,7 @@
   </div>
 
   <!-- Custom JS -->
-  <script src="app.js?v=1.06.75"></script>
+  <script src="app.js?v=1.06.76"></script>
 
     <!-- Floating Toast / Snackbar Notification (v1.06.73) -->
     <div id="toast-container" style="position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 9999999; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 90vw; width: max-content;"></div>

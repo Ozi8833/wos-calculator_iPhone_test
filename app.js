@@ -10,7 +10,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-const APP_VERSION = '1.06.75';
+const APP_VERSION = '1.06.76';
 window.APP_VERSION = APP_VERSION;
 const CURRENT_SCHEMA_VERSION = 4;
 window.CURRENT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
@@ -7301,10 +7301,10 @@ function updatePipButtonUi(isActive) {
 
   if (isActive) {
     btn.classList.add('pip-active');
-    label.textContent = '📺 小窓タイマー表示中 (タップで閉じる)';
+    label.textContent = '表示中';
   } else {
     btn.classList.remove('pip-active');
-    label.textContent = '📺 最前面小窓タイマー (PiP) を開く';
+    label.textContent = '小窓';
   }
 }
 
