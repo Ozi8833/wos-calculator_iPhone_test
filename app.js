@@ -10,7 +10,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-const APP_VERSION = '1.06.74';
+const APP_VERSION = '1.06.75';
 window.APP_VERSION = APP_VERSION;
 const CURRENT_SCHEMA_VERSION = 4;
 window.CURRENT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
@@ -7260,6 +7260,15 @@ function initPipStreamPreload() {
       pipVideoTrack = tracks[0];
     }
     video.srcObject = pipCanvasStream;
+    // 初期フレームを描画してメタデータを即座に生成
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (pipVideoTrack && typeof pipVideoTrack.requestFrame === 'function') {
+        try { pipVideoTrack.requestFrame(); } catch (e) {}
+      }
+    }
   }
 
   video.play().then(() => {
@@ -7422,7 +7431,7 @@ function drawAndPushPipFrame() {
 }
 
 // 5. PiP のトグル起動 / 閉じる (本物のユーザー同期クリック内で実行)
-function togglePictureInPictureTimer() {
+async function togglePictureInPictureTimer() {
   const video = document.getElementById('pip-video');
   if (!video) return;
 
@@ -7472,8 +7481,14 @@ function togglePictureInPictureTimer() {
     }
   }
 
-  // 標準 Picture-in-Picture
+  // 標準 Picture-in-Picture (PC Chrome/Edge等のメタデータ待機保護)
   if (typeof video.requestPictureInPicture === 'function') {
+    if (video.readyState === 0) {
+      await new Promise(res => {
+        video.addEventListener('loadedmetadata', res, { once: true });
+        setTimeout(res, 200);
+      });
+    }
     video.requestPictureInPicture()
       .then(() => {
         pipState = 'PIP';
