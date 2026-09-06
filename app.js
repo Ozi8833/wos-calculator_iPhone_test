@@ -7380,19 +7380,19 @@ function drawAndPushPipFrame() {
     ctx.textAlign = 'center';
     if (!simpleLaunchState.isCalculated) {
       ctx.fillStyle = '#e2e8f0';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.fillText('⚡️ 計算スタートを押してください', canvas.width / 2, 85);
+      ctx.font = 'bold 19px sans-serif';
+      ctx.fillText('🎯 計算スタートを押してください', canvas.width / 2, 85);
     } else if (isUrgent) {
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 24px sans-serif';
+      ctx.font = 'bold 21px sans-serif';
       ctx.fillText('🚨 まもなく発車！ (5秒前)', canvas.width / 2, 85);
     } else if (isFinished) {
       ctx.fillStyle = '#facc15';
-      ctx.font = 'bold 24px sans-serif';
-      ctx.fillText('⚡️ 発車時刻 到達！ (経過)', canvas.width / 2, 85);
+      ctx.font = 'bold 21px sans-serif';
+      ctx.fillText('🏁 発車時刻 到達！ (経過)', canvas.width / 2, 85);
     } else {
       ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 22px sans-serif';
+      ctx.font = 'bold 21px sans-serif';
       ctx.fillText('🎯 あなたの発車カウントダウン', canvas.width / 2, 85);
     }
 
