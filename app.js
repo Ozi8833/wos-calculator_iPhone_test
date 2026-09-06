@@ -1476,6 +1476,9 @@ function startClockLoop() {
     try {
       calculateInsertion();
       updateSimpleCountdown();
+      if (typeof drawAndPushPipFrame === 'function') {
+        drawAndPushPipFrame();
+      }
     } catch (e) {
       console.error('Calculate insertion error:', e);
     }
