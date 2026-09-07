@@ -1123,3 +1123,10 @@ button, .btn-game, input, select, .nav-item {
   border-color: #34d399 !important;
   box-shadow: 0 0 16px rgba(16, 185, 129, 0.6) !important;
 }
+
+/* ClockSync PiP Active Glowing Button State (v1.06.78) */
+#btn-start-clocksync-pip.pip-active {
+  background: linear-gradient(135deg, #047857, #10b981) !important;
+  border-color: #34d399 !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.7) !important;
+}

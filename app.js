@@ -10,7 +10,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-const APP_VERSION = '1.06.77';
+const APP_VERSION = '1.06.78';
 window.APP_VERSION = APP_VERSION;
 const CURRENT_SCHEMA_VERSION = 4;
 window.CURRENT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
@@ -7226,48 +7226,57 @@ window.resetOnboardingFlagForDebug = resetOnboardingFlagForDebug;
 
 
 /* ==========================================================================
-   📺 最前面小窓タイマー (Picture-in-Picture / PiP) エンジン (v1.06.74)
+   📺 最前面小窓タイマー (Picture-in-Picture / PiP) デュアルエンジン (v1.06.74 & v1.06.78)
    - 4大AI（チャッピー・Gemini・Claude・Antigravity）完全合意設計
-   - メディアAPI完全不干渉（リセット時play/srcObject操作ゼロ）
-   - canvas.captureStream(0) + 手動 track.requestFrame() による超絶高耐久
-   - クリーン後始末（track.stop()）＆ 状態マシンによる排他制御
+   - モードA: 発車カウントダウン小窓 (横長 480x240 / 2:1)
+   - モードB: ホワサバ時計同期小窓 (超縦長スリム 140x230 / 1:1.64)
+   - 完全排他制御 (State Machine) ＆ 非同期安全クリーン解放
+   - 共通の絶対時刻エンジン (getAdjustedNowTime) 参照
    ========================================================================== */
 
-let pipState = 'IDLE'; // 'IDLE' | 'STARTING' | 'PIP' | 'STOPPED'
+let pipMode = 'NONE'; // 'NONE' | 'LAUNCH' | 'SYNC'
+let pipState = 'IDLE'; // 'IDLE' | 'TRANSITIONING' | 'PIP' | 'STOPPED'
 let pipCanvasStream = null;
 let pipVideoTrack = null;
 let isPipVideoReady = false;
 
-// 1. ストリーム事前準備 (初回タッチまたはロード時)
-function initPipStreamPreload() {
-  const canvas = document.getElementById('pip-canvas');
+// 1. ストリーム事前準備
+function initPipStreamPreload(targetMode = 'LAUNCH') {
+  const canvasId = (targetMode === 'SYNC') ? 'pip-canvas-sync' : 'pip-canvas';
+  const canvas = document.getElementById(canvasId);
   const video = document.getElementById('pip-video');
   if (!canvas || !video) return;
 
-  if (!pipCanvasStream) {
-    if (typeof canvas.captureStream !== 'function') {
-      console.warn('[PiP] canvas.captureStream is not supported on this browser.');
-      return;
-    }
-    try {
-      pipCanvasStream = canvas.captureStream(0); // 手動供給モード
-    } catch (e) {
-      pipCanvasStream = canvas.captureStream();
-    }
+  // 既存トラックがある場合はクリーン停止
+  if (pipVideoTrack) {
+    try { pipVideoTrack.stop(); } catch (e) {}
+    pipVideoTrack = null;
+  }
 
-    const tracks = pipCanvasStream.getVideoTracks();
-    if (tracks && tracks.length > 0) {
-      pipVideoTrack = tracks[0];
-    }
-    video.srcObject = pipCanvasStream;
-    // 初期フレームを描画してメタデータを即座に生成
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#090d16';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      if (pipVideoTrack && typeof pipVideoTrack.requestFrame === 'function') {
-        try { pipVideoTrack.requestFrame(); } catch (e) {}
-      }
+  if (typeof canvas.captureStream !== 'function') {
+    console.warn('[PiP] canvas.captureStream is not supported on this browser.');
+    return;
+  }
+
+  try {
+    pipCanvasStream = canvas.captureStream(0); // 手動フレーム供給モード
+  } catch (e) {
+    pipCanvasStream = canvas.captureStream();
+  }
+
+  const tracks = pipCanvasStream.getVideoTracks();
+  if (tracks && tracks.length > 0) {
+    pipVideoTrack = tracks[0];
+  }
+  video.srcObject = pipCanvasStream;
+
+  // 初期フレームを描画してメタデータを即座に生成
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (pipVideoTrack && typeof pipVideoTrack.requestFrame === 'function') {
+      try { pipVideoTrack.requestFrame(); } catch (e) {}
     }
   }
 
@@ -7281,44 +7290,81 @@ function initPipStreamPreload() {
     }, { once: true });
   });
 
-  // イベントリスナー
-  video.addEventListener('leavepictureinpicture', handlePipClosed);
-  video.addEventListener('webkitpresentationmodechanged', () => {
-    if (video.webkitPresentationMode === 'inline') {
-      handlePipClosed();
-    } else if (video.webkitPresentationMode === 'picture-in-picture') {
-      pipState = 'PIP';
-      updatePipButtonUi(true);
-    }
-  });
-}
-
-// 2. PiP ボタンの表示同期
-function updatePipButtonUi(isActive) {
-  const btn = document.getElementById('btn-start-pip');
-  const label = document.getElementById('pip-btn-label');
-  if (!btn || !label) return;
-
-  if (isActive) {
-    btn.classList.add('pip-active');
-    label.textContent = '表示中';
-  } else {
-    btn.classList.remove('pip-active');
-    label.textContent = '小窓';
+  // イベントリスナーの多重登録を防止
+  if (!video._hasPipListeners) {
+    video.addEventListener('leavepictureinpicture', handlePipClosed);
+    video.addEventListener('webkitpresentationmodechanged', () => {
+      if (video.webkitPresentationMode === 'inline') {
+        handlePipClosed();
+      } else if (video.webkitPresentationMode === 'picture-in-picture') {
+        pipState = 'PIP';
+        updatePipButtonsUi();
+      }
+    });
+    video._hasPipListeners = true;
   }
 }
 
-// 3. 小窓を閉じた時のクリーン解放処理 (Claude/Gemini/チャッピー合意)
+// 2. PiP ボタンUIの同期
+function updatePipButtonsUi() {
+  const isLaunchActive = (pipState === 'PIP' && pipMode === 'LAUNCH');
+  const isSyncActive = (pipState === 'PIP' && pipMode === 'SYNC');
+
+  // 発車カウントダウンボタン
+  const launchBtn = document.getElementById('btn-start-pip');
+  const launchLabel = document.getElementById('pip-btn-label');
+  if (launchBtn && launchLabel) {
+    if (isLaunchActive) {
+      launchBtn.classList.add('pip-active');
+      launchLabel.textContent = '表示中';
+    } else {
+      launchBtn.classList.remove('pip-active');
+      launchLabel.textContent = '小窓';
+    }
+  }
+
+  // 時計同期小窓ボタン
+  const syncBtn = document.getElementById('btn-start-clocksync-pip');
+  const syncLabel = document.getElementById('clocksync-pip-btn-label');
+  if (syncBtn && syncLabel) {
+    if (isSyncActive) {
+      syncBtn.classList.add('pip-active');
+      syncLabel.textContent = '小窓 表示中';
+    } else {
+      syncBtn.classList.remove('pip-active');
+      syncLabel.textContent = '⏱️ 時計同期小窓を開く';
+    }
+  }
+}
+
+// 3. 小窓を閉じた時のクリーン解放処理
 function handlePipClosed() {
   pipState = 'STOPPED';
-  updatePipButtonUi(false);
+  pipMode = 'NONE';
+  updatePipButtonsUi();
   console.log('[PiP] 小窓が閉じられました (クリーン状態へ遷移)');
 }
 
-// 4. 手動フレーム描画 ＆ requestFrame 供給
-function drawAndPushPipFrame() {
-  if (pipState !== 'PIP') return;
+// 4. 小窓を安全に閉じる共通非同期関数
+async function safeClosePip() {
+  const video = document.getElementById('pip-video');
+  if (!video) return;
 
+  if (pipState === 'PIP') {
+    if (typeof video.webkitSetPresentationMode === 'function') {
+      try { video.webkitSetPresentationMode('inline'); } catch (e) {}
+    } else if (document.pictureInPictureElement) {
+      try { await document.exitPictureInPicture(); } catch (e) {}
+    }
+    handlePipClosed();
+    // OS側の解放完了を安全待機
+    await new Promise(r => setTimeout(r, 150));
+  }
+}
+
+// 5-A. 発車カウントダウン小窓 (横長 480x240) の描画
+function drawLaunchPipFrame() {
+  if (pipState !== 'PIP' || pipMode !== 'LAUNCH') return;
   const canvas = document.getElementById('pip-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -7349,7 +7395,7 @@ function drawAndPushPipFrame() {
       remainingText = '未計算';
     }
 
-    // 背景描画 (5秒前アラート時は赤黒点滅)
+    // 背景描画
     if (isUrgent) {
       const blink = Math.floor(remainingMs / 400) % 2 === 0;
       ctx.fillStyle = blink ? '#7f1d1d' : '#020617';
@@ -7365,7 +7411,7 @@ function drawAndPushPipFrame() {
     ctx.lineWidth = 6;
     ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
 
-    // ヘッダー情報 (現在時刻)
+    // ヘッダー情報
     const nowStr = formatTimeHHMMSS(now) + '.' + Math.floor(now.getMilliseconds() / 100);
     ctx.fillStyle = isUrgent ? '#fca5a5' : '#38bdf8';
     ctx.font = 'bold 24px monospace';
@@ -7406,13 +7452,7 @@ function drawAndPushPipFrame() {
     }
 
     // デカ文字タイマー
-    if (isUrgent) {
-      ctx.fillStyle = '#fef08a';
-    } else if (isFinished) {
-      ctx.fillStyle = '#94a3b8';
-    } else {
-      ctx.fillStyle = '#facc15';
-    }
+    ctx.fillStyle = isUrgent ? '#fef08a' : (isFinished ? '#94a3b8' : '#facc15');
     ctx.font = '900 84px monospace';
     ctx.fillText(remainingText, canvas.width / 2, 175);
 
@@ -7426,24 +7466,111 @@ function drawAndPushPipFrame() {
       pipVideoTrack.requestFrame();
     }
   } catch (err) {
-    console.error('[PiP Render Error]', err);
+    console.error('[PiP Launch Render Error]', err);
   }
 }
 
-// 5. PiP のトグル起動 / 閉じる (本物のユーザー同期クリック内で実行)
+// 5-B. ホワサバ時計同期小窓 (超縦長スリム 140x230 / v1.06.78 新設) の描画
+function drawClockSyncPipFrame() {
+  if (pipState !== 'PIP' || pipMode !== 'SYNC') return;
+  const canvas = document.getElementById('pip-canvas-sync');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  try {
+    const now = getAdjustedNowTime();
+    const w = canvas.width;
+    const h = canvas.height;
+    const ms = now.getMilliseconds();
+    const isBeat = ms < 200; // 秒の変わり目200ms間、枠線とランプが点滅発光！
+
+    // 1. 背景描画
+    ctx.fillStyle = isBeat ? '#0f233a' : '#080c14';
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. 外枠 (秒切り替えビート点滅)
+    ctx.strokeStyle = isBeat ? '#ffb700' : '#00f0ff';
+    ctx.lineWidth = isBeat ? 5 : 3;
+    ctx.strokeRect(2, 2, w - 4, h - 4);
+
+    // 3. 【最上段・主役】特大デカ文字「MM:SS.s」
+    // ホワサバ時計の真横に一直線に並ぶ配置！
+    const mStr = String(now.getUTCMinutes()).padStart(2, '0');
+    const sStr = String(now.getUTCSeconds()).padStart(2, '0');
+    const dStr = Math.floor(ms / 100);
+    const mmssText = `${mStr}:${sStr}.${dStr}`;
+
+    ctx.fillStyle = isBeat ? '#fef08a' : '#00f0ff';
+    ctx.font = '900 27px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(mmssText, w / 2, 42);
+
+    // 4. 2段目: UTC 時刻 ＆ ビートランプ (Claude提案: 深夜時報切り替えハイライト)
+    const isNearHourShift = (mStr === '59' && Number(sStr) >= 55) || (mStr === '00' && Number(sStr) <= 5);
+    const hStr = 'UTC ' + String(now.getUTCHours()).padStart(2, '0') + '時';
+    ctx.fillStyle = isNearHourShift ? '#facc15' : '#94a3b8';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(hStr, w / 2, 70);
+
+    // ビートインジケーターランプ (右上隅)
+    ctx.beginPath();
+    ctx.arc(w - 14, 14, 5, 0, Math.PI * 2);
+    ctx.fillStyle = isBeat ? '#ffb700' : '#1e293b';
+    ctx.fill();
+
+    // 5. 3段目: 秒針プログレスバー (1秒周期)
+    const progress = ms / 1000;
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(10, 88, w - 20, 5);
+    ctx.fillStyle = isBeat ? '#ffb700' : '#00ff88';
+    ctx.fillRect(10, 88, (w - 20) * progress, 5);
+
+    // 6. 下段: 現在の補正値ステータス
+    const secVal = (state.syncOffsetMs / 1000).toFixed(1);
+    const signStr = state.syncOffsetMs > 0 ? '+' : '';
+    ctx.fillStyle = state.syncOffsetMs === 0 ? '#64748b' : '#00ff88';
+    ctx.font = 'bold 15px monospace';
+    ctx.fillText(`補正: ${signStr}${secVal}s`, w / 2, 130);
+
+    // 7. モードラベル
+    ctx.fillStyle = '#475569';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('WOS 時計同期', w / 2, 160);
+
+    // 手動フレーム送信
+    if (pipVideoTrack && typeof pipVideoTrack.requestFrame === 'function') {
+      pipVideoTrack.requestFrame();
+    }
+  } catch (err) {
+    console.error('[PiP ClockSync Render Error]', err);
+  }
+}
+
+// 5-C. 統合フレーム描画関数 (毎フレーム100ms周期呼出し)
+function drawAndPushPipFrame() {
+  if (pipState !== 'PIP') return;
+  if (pipMode === 'LAUNCH') {
+    drawLaunchPipFrame();
+  } else if (pipMode === 'SYNC') {
+    drawClockSyncPipFrame();
+  }
+}
+
+// 6-A. 発車カウントダウン小窓のトグル (横長 480x240)
 async function togglePictureInPictureTimer() {
   const video = document.getElementById('pip-video');
   if (!video) return;
 
-  // すでにPiP中の場合は閉じる
-  if (pipState === 'PIP') {
-    if (typeof video.webkitSetPresentationMode === 'function') {
-      video.webkitSetPresentationMode('inline');
-    } else if (document.pictureInPictureElement) {
-      document.exitPictureInPicture().catch(() => {});
-    }
-    handlePipClosed();
+  // すでに発車カウントダウン中なら閉じる
+  if (pipState === 'PIP' && pipMode === 'LAUNCH') {
+    await safeClosePip();
     return;
+  }
+
+  // 時計同期小窓が開いている場合は安全に終了させてから切り替え
+  if (pipState === 'PIP' && pipMode === 'SYNC') {
+    await safeClosePip();
   }
 
   // 起動前チェック: 計算中か案内
@@ -7451,37 +7578,31 @@ async function togglePictureInPictureTimer() {
     showToast('先に「差し込み計算スタート！」を押してください', 'warning');
   }
 
-  if (pipState === 'STARTING') return;
-  pipState = 'STARTING';
+  if (pipState === 'TRANSITIONING') return;
+  pipState = 'TRANSITIONING';
+  pipMode = 'LAUNCH';
 
-  // ストリームが未作成なら即時同期生成
-  if (!pipCanvasStream) {
-    initPipStreamPreload();
-  }
+  initPipStreamPreload('LAUNCH');
 
   if (video.paused) {
     video.play().catch(() => {});
   }
 
-  // 初回1コマを即座に描画
-  pipState = 'PIP'; // 一時的に描画を通す
-  drawAndPushPipFrame();
+  pipState = 'PIP';
+  drawLaunchPipFrame();
 
-  // iOS Safari WebKit PiP
   if (typeof video.webkitSetPresentationMode === 'function') {
     try {
       video.webkitSetPresentationMode('picture-in-picture');
-      updatePipButtonUi(true);
-      showToast('小窓タイマーを起動しました！ゲームへ戻れます', 'success');
+      updatePipButtonsUi();
+      showToast('発車カウントダウン小窓を起動しました！', 'success');
       return;
     } catch (e) {
-      pipState = 'STOPPED';
-      updatePipButtonUi(false);
-      console.error('[PiP WebKit Exception]', e);
+      handlePipClosed();
+      console.error('[PiP Launch WebKit Exception]', e);
     }
   }
 
-  // 標準 Picture-in-Picture (PC Chrome/Edge等のメタデータ待機保護)
   if (typeof video.requestPictureInPicture === 'function') {
     if (video.readyState === 0) {
       await new Promise(res => {
@@ -7492,24 +7613,87 @@ async function togglePictureInPictureTimer() {
     video.requestPictureInPicture()
       .then(() => {
         pipState = 'PIP';
-        updatePipButtonUi(true);
-        showToast('小窓タイマーを起動しました！', 'success');
+        updatePipButtonsUi();
+        showToast('発車カウントダウン小窓を起動しました！', 'success');
       })
       .catch((err) => {
-        pipState = 'STOPPED';
-        updatePipButtonUi(false);
+        handlePipClosed();
         showToast('小窓の起動に失敗しました: ' + err.message, 'error');
       });
   } else {
-    pipState = 'STOPPED';
-    updatePipButtonUi(false);
+    handlePipClosed();
     showToast('お使いの端末・ブラウザはPicture-in-Pictureに対応していません', 'warning');
   }
 }
 
+// 6-B. ホワサバ時計同期小窓のトグル (超縦長スリム 140x230 / v1.06.78 新設)
+async function toggleClockSyncPictureInPictureTimer() {
+  const video = document.getElementById('pip-video');
+  if (!video) return;
+
+  // すでに時計同期小窓中なら閉じる
+  if (pipState === 'PIP' && pipMode === 'SYNC') {
+    await safeClosePip();
+    return;
+  }
+
+  // 発車カウントダウンが開いている場合は安全に終了させてから切り替え
+  if (pipState === 'PIP' && pipMode === 'LAUNCH') {
+    await safeClosePip();
+  }
+
+  if (pipState === 'TRANSITIONING') return;
+  pipState = 'TRANSITIONING';
+  pipMode = 'SYNC';
+
+  initPipStreamPreload('SYNC');
+
+  if (video.paused) {
+    video.play().catch(() => {});
+  }
+
+  pipState = 'PIP';
+  drawClockSyncPipFrame();
+
+  if (typeof video.webkitSetPresentationMode === 'function') {
+    try {
+      video.webkitSetPresentationMode('picture-in-picture');
+      updatePipButtonsUi();
+      showToast('時計同期小窓を起動しました！ホワサバ画面へ移動して見比べられます', 'success');
+      return;
+    } catch (e) {
+      handlePipClosed();
+      console.error('[PiP Sync WebKit Exception]', e);
+    }
+  }
+
+  if (typeof video.requestPictureInPicture === 'function') {
+    if (video.readyState === 0) {
+      await new Promise(res => {
+        video.addEventListener('loadedmetadata', res, { once: true });
+        setTimeout(res, 200);
+      });
+    }
+    video.requestPictureInPicture()
+      .then(() => {
+        pipState = 'PIP';
+        updatePipButtonsUi();
+        showToast('時計同期小窓を起動しました！ホワサバ画面へ移動して見比べられます', 'success');
+      })
+      .catch((err) => {
+        handlePipClosed();
+        showToast('小窓の起動に失敗しました: ' + err.message, 'error');
+      });
+  } else {
+    handlePipClosed();
+    showToast('お使いの端末・ブラウザはPicture-in-Pictureに対応していません', 'warning');
+  }
+}
+window.toggleClockSyncPictureInPictureTimer = toggleClockSyncPictureInPictureTimer;
+
 // アプリ起動時にPiP事前準備をキック
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initPipStreamPreload);
+  document.addEventListener('DOMContentLoaded', () => initPipStreamPreload('LAUNCH'));
 } else {
-  initPipStreamPreload();
+  initPipStreamPreload('LAUNCH');
 }
