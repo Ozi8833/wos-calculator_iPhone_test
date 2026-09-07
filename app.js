@@ -7226,7 +7226,7 @@ window.resetOnboardingFlagForDebug = resetOnboardingFlagForDebug;
 
 
 /* ==========================================================================
-   📺 最前面小窓タイマー (Picture-in-Picture / PiP) 単一Stream統合エンジン (v1.06.79)
+   📺 最前面小窓タイマー (Picture-in-Picture / PiP) 単一Stream統合エンジン (v1.06.80)
    - 3大AI（Claude・チャッピー・Gemini）完全合意設計
    - 横長 480x240 (2:1) に完全統一（PCでの最小化 260x130 達成）
    - 単一Canvas（#pip-canvas）＆ 単一MediaStream ＆ 単一Video要素
@@ -7566,6 +7566,7 @@ async function startPipWithMode(targetMode) {
   pipState = 'PIP';
   drawAndPushPipFrame();
 
+  // WebKit (iOS Safari) 向けパス
   if (typeof video.webkitSetPresentationMode === 'function') {
     try {
       video.webkitSetPresentationMode('picture-in-picture');
@@ -7578,14 +7579,48 @@ async function startPipWithMode(targetMode) {
     }
   }
 
+  // W3C標準 Picture-in-Picture パス (Android Chrome / PC Chrome / Edge)
+  // チャッピー指摘対応 (v1.06.80): Android環境の非同期レースを未然防止する堅牢ガード
   if (typeof video.requestPictureInPicture === 'function') {
     try {
+      // ガード①: video が一時停止中なら再生を確実化
+      if (video.paused) {
+        try { await video.play(); } catch (playErr) { console.warn('[PiP] video.play() retry warning:', playErr); }
+      }
+
+      // ガード②: readyState < 2 (フレーム未到達) の場合は loadeddata イベントまたは最大 400ms 待機
+      if (video.readyState < 2) {
+        await new Promise((resolve) => {
+          let resolved = false;
+          const onData = () => {
+            if (!resolved) {
+              resolved = true;
+              video.removeEventListener('loadeddata', onData);
+              resolve();
+            }
+          };
+          video.addEventListener('loadeddata', onData, { once: true });
+          // タイムアウトフォールバック (最長400ms)
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              video.removeEventListener('loadeddata', onData);
+              resolve();
+            }
+          }, 400);
+        });
+      }
+
+      // フレームを念押しプッシュ
+      drawAndPushPipFrame();
+
       await video.requestPictureInPicture();
       pipState = 'PIP';
       updatePipButtonsUi();
       showToast(targetMode === 'SYNC' ? '時計同期小窓を起動しました！' : '発車カウントダウン小窓を起動しました！', 'success');
     } catch (err) {
       handlePipClosed();
+      console.error('[PiP W3C Exception]', err);
       showToast('小窓の起動に失敗しました: ' + err.message, 'error');
     }
   } else {
