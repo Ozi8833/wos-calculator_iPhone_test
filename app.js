@@ -10,7 +10,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-const APP_VERSION = '1.06.78';
+const APP_VERSION = '1.06.79';
 window.APP_VERSION = APP_VERSION;
 const CURRENT_SCHEMA_VERSION = 4;
 window.CURRENT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
@@ -7226,12 +7226,13 @@ window.resetOnboardingFlagForDebug = resetOnboardingFlagForDebug;
 
 
 /* ==========================================================================
-   📺 最前面小窓タイマー (Picture-in-Picture / PiP) デュアルエンジン (v1.06.74 & v1.06.78)
-   - 4大AI（チャッピー・Gemini・Claude・Antigravity）完全合意設計
-   - モードA: 発車カウントダウン小窓 (横長 480x240 / 2:1)
-   - モードB: ホワサバ時計同期小窓 (超縦長スリム 140x230 / 1:1.64)
-   - 完全排他制御 (State Machine) ＆ 非同期安全クリーン解放
-   - 共通の絶対時刻エンジン (getAdjustedNowTime) 参照
+   📺 最前面小窓タイマー (Picture-in-Picture / PiP) 単一Stream統合エンジン (v1.06.79)
+   - 3大AI（Claude・チャッピー・Gemini）完全合意設計
+   - 横長 480x240 (2:1) に完全統一（PCでの最小化 260x130 達成）
+   - 単一Canvas（#pip-canvas）＆ 単一MediaStream ＆ 単一Video要素
+   - video.srcObject の差し替えを完全根絶し、初回固定ロードで readyState 安定
+   - ボタン押下時は pipMode ('LAUNCH' | 'SYNC') を切り替えてHUDを描き換えるだけ
+   - シームレス・モードトグル（開いたまま瞬時に発車⇔時計同期を切替）
    ========================================================================== */
 
 let pipMode = 'NONE'; // 'NONE' | 'LAUNCH' | 'SYNC'
@@ -7240,18 +7241,13 @@ let pipCanvasStream = null;
 let pipVideoTrack = null;
 let isPipVideoReady = false;
 
-// 1. ストリーム事前準備
-function initPipStreamPreload(targetMode = 'LAUNCH') {
-  const canvasId = (targetMode === 'SYNC') ? 'pip-canvas-sync' : 'pip-canvas';
-  const canvas = document.getElementById(canvasId);
+// 1. 単一ストリーム事前準備 (アプリ起動時1回のみ実行、再代入ゼロ)
+function initPipStreamPreload() {
+  const canvas = document.getElementById('pip-canvas');
   const video = document.getElementById('pip-video');
   if (!canvas || !video) return;
 
-  // 既存トラックがある場合はクリーン停止
-  if (pipVideoTrack) {
-    try { pipVideoTrack.stop(); } catch (e) {}
-    pipVideoTrack = null;
-  }
+  if (pipCanvasStream) return; // 既に初期化済みなら何もしない（不変性）
 
   if (typeof canvas.captureStream !== 'function') {
     console.warn('[PiP] canvas.captureStream is not supported on this browser.');
@@ -7270,7 +7266,7 @@ function initPipStreamPreload(targetMode = 'LAUNCH') {
   }
   video.srcObject = pipCanvasStream;
 
-  // 初期フレームを描画してメタデータを即座に生成
+  // 初期プレースホルダーフレームを描画
   const ctx = canvas.getContext('2d');
   if (ctx) {
     ctx.fillStyle = '#090d16';
@@ -7290,7 +7286,6 @@ function initPipStreamPreload(targetMode = 'LAUNCH') {
     }, { once: true });
   });
 
-  // イベントリスナーの多重登録を防止
   if (!video._hasPipListeners) {
     video.addEventListener('leavepictureinpicture', handlePipClosed);
     video.addEventListener('webkitpresentationmodechanged', () => {
@@ -7337,7 +7332,7 @@ function updatePipButtonsUi() {
   }
 }
 
-// 3. 小窓を閉じた時のクリーン解放処理
+// 3. 小窓を閉じた時のクリーン処理
 function handlePipClosed() {
   pipState = 'STOPPED';
   pipMode = 'NONE';
@@ -7357,343 +7352,267 @@ async function safeClosePip() {
       try { await document.exitPictureInPicture(); } catch (e) {}
     }
     handlePipClosed();
-    // OS側の解放完了を安全待機
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 120));
   }
 }
 
-// 5-A. 発車カウントダウン小窓 (横長 480x240) の描画
-function drawLaunchPipFrame() {
-  if (pipState !== 'PIP' || pipMode !== 'LAUNCH') return;
+// 5-A. 発車カウントダウンHUD描画 (480x240)
+function drawLaunchHud(ctx, now, w, h) {
+  let remainingMs = 0;
+  let remainingText = '--:--.-';
+  let isUrgent = false;
+  let isFinished = false;
+
+  if (simpleLaunchState.isCalculated && simpleLaunchState.targetLaunchDate) {
+    remainingMs = simpleLaunchState.targetLaunchDate.getTime() - now.getTime();
+    isUrgent = (remainingMs > 0 && remainingMs <= 5000);
+    isFinished = (remainingMs <= 0);
+
+    if (isFinished) {
+      remainingText = '00:00.0';
+    } else {
+      const totalSec = Math.floor(remainingMs / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      const d = Math.floor((remainingMs % 1000) / 100);
+      remainingText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${d}`;
+    }
+  } else {
+    remainingText = '未計算';
+  }
+
+  // 背景描画
+  if (isUrgent) {
+    const blink = Math.floor(remainingMs / 400) % 2 === 0;
+    ctx.fillStyle = blink ? '#7f1d1d' : '#020617';
+  } else if (isFinished) {
+    ctx.fillStyle = '#1e293b';
+  } else {
+    ctx.fillStyle = '#090d16';
+  }
+  ctx.fillRect(0, 0, w, h);
+
+  // ネオン外枠
+  ctx.strokeStyle = isUrgent ? '#ef4444' : (isFinished ? '#64748b' : '#0284c7');
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, w - 6, h - 6);
+
+  // ヘッダー情報
+  const nowStr = formatTimeHHMMSS(now) + '.' + Math.floor(now.getMilliseconds() / 100);
+  ctx.fillStyle = isUrgent ? '#fca5a5' : '#38bdf8';
+  ctx.font = 'bold 24px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('⚔️ WOS 差込タイマー', 20, 36);
+
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '20px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(nowStr, w - 20, 36);
+
+  // 区切り線
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(20, 48);
+  ctx.lineTo(w - 20, 48);
+  ctx.stroke();
+
+  // 状態ラベル
+  ctx.textAlign = 'center';
+  if (!simpleLaunchState.isCalculated) {
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 19px sans-serif';
+    ctx.fillText('🎯 計算スタートを押してください', w / 2, 85);
+  } else if (isUrgent) {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 21px sans-serif';
+    ctx.fillText('🚨 まもなく発車！ (5秒前)', w / 2, 85);
+  } else if (isFinished) {
+    ctx.fillStyle = '#facc15';
+    ctx.font = 'bold 21px sans-serif';
+    ctx.fillText('🏁 発車時刻 到達！ (経過)', w / 2, 85);
+  } else {
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 21px sans-serif';
+    ctx.fillText('🎯 あなたの発車カウントダウン', w / 2, 85);
+  }
+
+  // デカ文字タイマー
+  ctx.fillStyle = isUrgent ? '#fef08a' : (isFinished ? '#94a3b8' : '#facc15');
+  ctx.font = '900 84px monospace';
+  ctx.fillText(remainingText, w / 2, 175);
+
+  // フッター情報
+  ctx.fillStyle = '#64748b';
+  ctx.font = '18px sans-serif';
+  ctx.fillText('ホワサバ画面の隅に配置してご利用ください', w / 2, 215);
+}
+
+// 5-B. 横長 480x240 時計同期HUD描画 (Gemini完全合意レイアウト)
+function drawClockSyncHud(ctx, now, w, h) {
+  const ms = now.getMilliseconds();
+  const isBeat = ms < 200; // 秒の変わり目200ms点滅
+
+  // 背景
+  ctx.fillStyle = isBeat ? '#0f233a' : '#080c14';
+  ctx.fillRect(0, 0, w, h);
+
+  // 外枠
+  ctx.strokeStyle = isBeat ? '#ffb700' : '#00f0ff';
+  ctx.lineWidth = isBeat ? 6 : 4;
+  ctx.strokeRect(3, 3, w - 6, h - 6);
+
+  // 左側: 特大デカ文字 MM:SS.s (68px)
+  const mStr = String(now.getUTCMinutes()).padStart(2, '0');
+  const sStr = String(now.getUTCSeconds()).padStart(2, '0');
+  const dStr = Math.floor(ms / 100);
+  const timeStr = `${mStr}:${sStr}.${dStr}`;
+
+  ctx.fillStyle = isBeat ? '#fef08a' : '#00f0ff';
+  ctx.font = '900 68px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(timeStr, 24, 140);
+
+  // 左上タイトル
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('⏱️ WOS 時計同期', 24, 46);
+
+  // 右側パネル境界線
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(310, 20);
+  ctx.lineTo(310, h - 20);
+  ctx.stroke();
+
+  // 右側: UTC時刻・プログレス・補正値
+  ctx.textAlign = 'center';
+  const rightCenterX = 395;
+
+  // UTC時表示
+  const isNearHourShift = (mStr === '59' && Number(sStr) >= 55) || (mStr === '00' && Number(sStr) <= 5);
+  ctx.fillStyle = isNearHourShift ? '#facc15' : '#38bdf8';
+  ctx.font = 'bold 22px monospace';
+  ctx.fillText(`UTC ${String(now.getUTCHours()).padStart(2, '0')}時`, rightCenterX, 60);
+
+  // 1秒周期プログレスバー
+  const prog = ms / 1000;
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(325, 85, 140, 10);
+  ctx.fillStyle = isBeat ? '#ffb700' : '#00ff88';
+  ctx.fillRect(325, 85, 140 * prog, 10);
+
+  // 補正値バッジ
+  const offsetSec = (state.syncOffsetMs / 1000).toFixed(1);
+  const sign = state.syncOffsetMs > 0 ? '+' : '';
+  ctx.fillStyle = state.syncOffsetMs === 0 ? '#64748b' : '#00ff88';
+  ctx.font = 'bold 20px monospace';
+  ctx.fillText(`補正: ${sign}${offsetSec}s`, rightCenterX, 140);
+
+  // 下部案内
+  ctx.fillStyle = '#64748b';
+  ctx.font = '16px sans-serif';
+  ctx.fillText('ホワサバ秒針と見比べ', rightCenterX, 195);
+}
+
+// 5-C. 統合描画関数 (毎フレーム100ms周期呼出し)
+function drawAndPushPipFrame() {
+  if (pipState !== 'PIP') return;
   const canvas = document.getElementById('pip-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  try {
-    const now = getAdjustedNowTime();
-    let remainingMs = 0;
-    let remainingText = '--:--.-';
-    let isUrgent = false;
-    let isFinished = false;
+  const now = getAdjustedNowTime();
+  const w = canvas.width;  // 480
+  const h = canvas.height; // 240
 
-    if (simpleLaunchState.isCalculated && simpleLaunchState.targetLaunchDate) {
-      remainingMs = simpleLaunchState.targetLaunchDate.getTime() - now.getTime();
-      isUrgent = (remainingMs > 0 && remainingMs <= 5000);
-      isFinished = (remainingMs <= 0);
-
-      if (isFinished) {
-        remainingText = '00:00.0';
-      } else {
-        const totalSec = Math.floor(remainingMs / 1000);
-        const m = Math.floor(totalSec / 60);
-        const s = totalSec % 60;
-        const d = Math.floor((remainingMs % 1000) / 100);
-        remainingText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${d}`;
-      }
-    } else {
-      remainingText = '未計算';
-    }
-
-    // 背景描画
-    if (isUrgent) {
-      const blink = Math.floor(remainingMs / 400) % 2 === 0;
-      ctx.fillStyle = blink ? '#7f1d1d' : '#020617';
-    } else if (isFinished) {
-      ctx.fillStyle = '#1e293b';
-    } else {
-      ctx.fillStyle = '#090d16';
-    }
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // ネオン外枠
-    ctx.strokeStyle = isUrgent ? '#ef4444' : (isFinished ? '#64748b' : '#0284c7');
-    ctx.lineWidth = 6;
-    ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-
-    // ヘッダー情報
-    const nowStr = formatTimeHHMMSS(now) + '.' + Math.floor(now.getMilliseconds() / 100);
-    ctx.fillStyle = isUrgent ? '#fca5a5' : '#38bdf8';
-    ctx.font = 'bold 24px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('⚔️ WOS 差込タイマー', 20, 36);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '20px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(nowStr, canvas.width - 20, 36);
-
-    // 区切り線
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(20, 48);
-    ctx.lineTo(canvas.width - 20, 48);
-    ctx.stroke();
-
-    // 状態ラベル
-    ctx.textAlign = 'center';
-    if (!simpleLaunchState.isCalculated) {
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = 'bold 19px sans-serif';
-      ctx.fillText('🎯 計算スタートを押してください', canvas.width / 2, 85);
-    } else if (isUrgent) {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 21px sans-serif';
-      ctx.fillText('🚨 まもなく発車！ (5秒前)', canvas.width / 2, 85);
-    } else if (isFinished) {
-      ctx.fillStyle = '#facc15';
-      ctx.font = 'bold 21px sans-serif';
-      ctx.fillText('🏁 発車時刻 到達！ (経過)', canvas.width / 2, 85);
-    } else {
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 21px sans-serif';
-      ctx.fillText('🎯 あなたの発車カウントダウン', canvas.width / 2, 85);
-    }
-
-    // デカ文字タイマー
-    ctx.fillStyle = isUrgent ? '#fef08a' : (isFinished ? '#94a3b8' : '#facc15');
-    ctx.font = '900 84px monospace';
-    ctx.fillText(remainingText, canvas.width / 2, 175);
-
-    // フッター情報
-    ctx.fillStyle = '#64748b';
-    ctx.font = '18px sans-serif';
-    ctx.fillText('ホワサバ画面の隅に配置してご利用ください', canvas.width / 2, 215);
-
-    // 手動フレーム送信
-    if (pipVideoTrack && typeof pipVideoTrack.requestFrame === 'function') {
-      pipVideoTrack.requestFrame();
-    }
-  } catch (err) {
-    console.error('[PiP Launch Render Error]', err);
-  }
-}
-
-// 5-B. ホワサバ時計同期小窓 (超縦長スリム 140x230 / v1.06.78 新設) の描画
-function drawClockSyncPipFrame() {
-  if (pipState !== 'PIP' || pipMode !== 'SYNC') return;
-  const canvas = document.getElementById('pip-canvas-sync');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  try {
-    const now = getAdjustedNowTime();
-    const w = canvas.width;
-    const h = canvas.height;
-    const ms = now.getMilliseconds();
-    const isBeat = ms < 200; // 秒の変わり目200ms間、枠線とランプが点滅発光！
-
-    // 1. 背景描画
-    ctx.fillStyle = isBeat ? '#0f233a' : '#080c14';
-    ctx.fillRect(0, 0, w, h);
-
-    // 2. 外枠 (秒切り替えビート点滅)
-    ctx.strokeStyle = isBeat ? '#ffb700' : '#00f0ff';
-    ctx.lineWidth = isBeat ? 5 : 3;
-    ctx.strokeRect(2, 2, w - 4, h - 4);
-
-    // 3. 【最上段・主役】特大デカ文字「MM:SS.s」
-    // ホワサバ時計の真横に一直線に並ぶ配置！
-    const mStr = String(now.getUTCMinutes()).padStart(2, '0');
-    const sStr = String(now.getUTCSeconds()).padStart(2, '0');
-    const dStr = Math.floor(ms / 100);
-    const mmssText = `${mStr}:${sStr}.${dStr}`;
-
-    ctx.fillStyle = isBeat ? '#fef08a' : '#00f0ff';
-    ctx.font = '900 27px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(mmssText, w / 2, 42);
-
-    // 4. 2段目: UTC 時刻 ＆ ビートランプ (Claude提案: 深夜時報切り替えハイライト)
-    const isNearHourShift = (mStr === '59' && Number(sStr) >= 55) || (mStr === '00' && Number(sStr) <= 5);
-    const hStr = 'UTC ' + String(now.getUTCHours()).padStart(2, '0') + '時';
-    ctx.fillStyle = isNearHourShift ? '#facc15' : '#94a3b8';
-    ctx.font = 'bold 13px monospace';
-    ctx.fillText(hStr, w / 2, 70);
-
-    // ビートインジケーターランプ (右上隅)
-    ctx.beginPath();
-    ctx.arc(w - 14, 14, 5, 0, Math.PI * 2);
-    ctx.fillStyle = isBeat ? '#ffb700' : '#1e293b';
-    ctx.fill();
-
-    // 5. 3段目: 秒針プログレスバー (1秒周期)
-    const progress = ms / 1000;
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(10, 88, w - 20, 5);
-    ctx.fillStyle = isBeat ? '#ffb700' : '#00ff88';
-    ctx.fillRect(10, 88, (w - 20) * progress, 5);
-
-    // 6. 下段: 現在の補正値ステータス
-    const secVal = (state.syncOffsetMs / 1000).toFixed(1);
-    const signStr = state.syncOffsetMs > 0 ? '+' : '';
-    ctx.fillStyle = state.syncOffsetMs === 0 ? '#64748b' : '#00ff88';
-    ctx.font = 'bold 15px monospace';
-    ctx.fillText(`補正: ${signStr}${secVal}s`, w / 2, 130);
-
-    // 7. モードラベル
-    ctx.fillStyle = '#475569';
-    ctx.font = '11px sans-serif';
-    ctx.fillText('WOS 時計同期', w / 2, 160);
-
-    // 手動フレーム送信
-    if (pipVideoTrack && typeof pipVideoTrack.requestFrame === 'function') {
-      pipVideoTrack.requestFrame();
-    }
-  } catch (err) {
-    console.error('[PiP ClockSync Render Error]', err);
-  }
-}
-
-// 5-C. 統合フレーム描画関数 (毎フレーム100ms周期呼出し)
-function drawAndPushPipFrame() {
-  if (pipState !== 'PIP') return;
   if (pipMode === 'LAUNCH') {
-    drawLaunchPipFrame();
+    drawLaunchHud(ctx, now, w, h);
   } else if (pipMode === 'SYNC') {
-    drawClockSyncPipFrame();
+    drawClockSyncHud(ctx, now, w, h);
+  }
+
+  // 共通の単一トラックでフレームプッシュ
+  if (pipVideoTrack && typeof pipVideoTrack.requestFrame === 'function') {
+    try { pipVideoTrack.requestFrame(); } catch (e) {}
   }
 }
 
-// 6-A. 発車カウントダウン小窓のトグル (横長 480x240)
-async function togglePictureInPictureTimer() {
+// 6. 共通PiPモード起動・切替関数 (ストリーム再代入完全ゼロ)
+async function startPipWithMode(targetMode) {
   const video = document.getElementById('pip-video');
   if (!video) return;
 
-  // すでに発車カウントダウン中なら閉じる
-  if (pipState === 'PIP' && pipMode === 'LAUNCH') {
+  // すでに同じモードで起動中なら小窓を閉じる (トグル終了)
+  if (pipState === 'PIP' && pipMode === targetMode) {
     await safeClosePip();
     return;
   }
 
-  // 時計同期小窓が開いている場合は安全に終了させてから切り替え
-  if (pipState === 'PIP' && pipMode === 'SYNC') {
-    await safeClosePip();
+  // モードを即時変更
+  pipMode = targetMode;
+
+  // 既に小窓が開いている状態なら、絵を描き換えるだけで瞬時に切替完了！(神シームレス)
+  if (pipState === 'PIP') {
+    drawAndPushPipFrame();
+    updatePipButtonsUi();
+    showToast(targetMode === 'SYNC' ? '時計同期モードに切り替えました！' : '発車カウントダウンに切り替えました！', 'info');
+    return;
   }
 
-  // 起動前チェック: 計算中か案内
+  // 小窓が閉じていた場合の初回起動処理
+  pipState = 'PIP';
+  drawAndPushPipFrame();
+
+  if (typeof video.webkitSetPresentationMode === 'function') {
+    try {
+      video.webkitSetPresentationMode('picture-in-picture');
+      updatePipButtonsUi();
+      showToast(targetMode === 'SYNC' ? '時計同期小窓を起動しました！' : '発車カウントダウン小窓を起動しました！', 'success');
+      return;
+    } catch (e) {
+      handlePipClosed();
+      console.error('[PiP WebKit Exception]', e);
+    }
+  }
+
+  if (typeof video.requestPictureInPicture === 'function') {
+    try {
+      await video.requestPictureInPicture();
+      pipState = 'PIP';
+      updatePipButtonsUi();
+      showToast(targetMode === 'SYNC' ? '時計同期小窓を起動しました！' : '発車カウントダウン小窓を起動しました！', 'success');
+    } catch (err) {
+      handlePipClosed();
+      showToast('小窓の起動に失敗しました: ' + err.message, 'error');
+    }
+  } else {
+    handlePipClosed();
+    showToast('お使いの端末・ブラウザはPicture-in-Pictureに対応していません', 'warning');
+  }
+}
+
+// 7-A. 発車カウントダウン小窓トグル
+async function togglePictureInPictureTimer() {
   if (!simpleLaunchState.isCalculated) {
     showToast('先に「差し込み計算スタート！」を押してください', 'warning');
   }
-
-  if (pipState === 'TRANSITIONING') return;
-  pipState = 'TRANSITIONING';
-  pipMode = 'LAUNCH';
-
-  initPipStreamPreload('LAUNCH');
-
-  if (video.paused) {
-    video.play().catch(() => {});
-  }
-
-  pipState = 'PIP';
-  drawLaunchPipFrame();
-
-  if (typeof video.webkitSetPresentationMode === 'function') {
-    try {
-      video.webkitSetPresentationMode('picture-in-picture');
-      updatePipButtonsUi();
-      showToast('発車カウントダウン小窓を起動しました！', 'success');
-      return;
-    } catch (e) {
-      handlePipClosed();
-      console.error('[PiP Launch WebKit Exception]', e);
-    }
-  }
-
-  if (typeof video.requestPictureInPicture === 'function') {
-    if (video.readyState === 0) {
-      await new Promise(res => {
-        video.addEventListener('loadedmetadata', res, { once: true });
-        setTimeout(res, 200);
-      });
-    }
-    video.requestPictureInPicture()
-      .then(() => {
-        pipState = 'PIP';
-        updatePipButtonsUi();
-        showToast('発車カウントダウン小窓を起動しました！', 'success');
-      })
-      .catch((err) => {
-        handlePipClosed();
-        showToast('小窓の起動に失敗しました: ' + err.message, 'error');
-      });
-  } else {
-    handlePipClosed();
-    showToast('お使いの端末・ブラウザはPicture-in-Pictureに対応していません', 'warning');
-  }
+  await startPipWithMode('LAUNCH');
 }
 
-// 6-B. ホワサバ時計同期小窓のトグル (超縦長スリム 140x230 / v1.06.78 新設)
+// 7-B. 時計同期小窓トグル
 async function toggleClockSyncPictureInPictureTimer() {
-  const video = document.getElementById('pip-video');
-  if (!video) return;
-
-  // すでに時計同期小窓中なら閉じる
-  if (pipState === 'PIP' && pipMode === 'SYNC') {
-    await safeClosePip();
-    return;
-  }
-
-  // 発車カウントダウンが開いている場合は安全に終了させてから切り替え
-  if (pipState === 'PIP' && pipMode === 'LAUNCH') {
-    await safeClosePip();
-  }
-
-  if (pipState === 'TRANSITIONING') return;
-  pipState = 'TRANSITIONING';
-  pipMode = 'SYNC';
-
-  initPipStreamPreload('SYNC');
-
-  if (video.paused) {
-    video.play().catch(() => {});
-  }
-
-  pipState = 'PIP';
-  drawClockSyncPipFrame();
-
-  if (typeof video.webkitSetPresentationMode === 'function') {
-    try {
-      video.webkitSetPresentationMode('picture-in-picture');
-      updatePipButtonsUi();
-      showToast('時計同期小窓を起動しました！ホワサバ画面へ移動して見比べられます', 'success');
-      return;
-    } catch (e) {
-      handlePipClosed();
-      console.error('[PiP Sync WebKit Exception]', e);
-    }
-  }
-
-  if (typeof video.requestPictureInPicture === 'function') {
-    if (video.readyState === 0) {
-      await new Promise(res => {
-        video.addEventListener('loadedmetadata', res, { once: true });
-        setTimeout(res, 200);
-      });
-    }
-    video.requestPictureInPicture()
-      .then(() => {
-        pipState = 'PIP';
-        updatePipButtonsUi();
-        showToast('時計同期小窓を起動しました！ホワサバ画面へ移動して見比べられます', 'success');
-      })
-      .catch((err) => {
-        handlePipClosed();
-        showToast('小窓の起動に失敗しました: ' + err.message, 'error');
-      });
-  } else {
-    handlePipClosed();
-    showToast('お使いの端末・ブラウザはPicture-in-Pictureに対応していません', 'warning');
-  }
+  await startPipWithMode('SYNC');
 }
+
+window.togglePictureInPictureTimer = togglePictureInPictureTimer;
 window.toggleClockSyncPictureInPictureTimer = toggleClockSyncPictureInPictureTimer;
 
 // アプリ起動時にPiP事前準備をキック
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => initPipStreamPreload('LAUNCH'));
+  document.addEventListener('DOMContentLoaded', initPipStreamPreload);
 } else {
-  initPipStreamPreload('LAUNCH');
+  initPipStreamPreload();
 }
