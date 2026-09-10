@@ -10,7 +10,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-const APP_VERSION = '1.06.79';
+const APP_VERSION = '1.06.80';
 window.APP_VERSION = APP_VERSION;
 const CURRENT_SCHEMA_VERSION = 4;
 window.CURRENT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
