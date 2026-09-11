@@ -1176,11 +1176,3 @@ html.env-line-webview .tap-to-start-btn {
   box-shadow: 0 0 20px rgba(0, 240, 255, 0.9), 0 4px 12px rgba(0, 0, 0, 0.7) !important;
 }
 
-/* 5. LINE内蔵ブラウザ / WebView: SVGマスクGPU破綻(Black Tile)防止フォールバック */
-html.env-line-webview #onboarding-svg-mask {
-  display: none !important;
-}
-
-html.env-line-webview #onboarding-overlay.active {
-  background: rgba(4, 8, 18, 0.85) !important;
-}
