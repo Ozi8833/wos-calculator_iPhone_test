@@ -2990,7 +2990,28 @@ function migrateLegacyPresetSelections() {
 window.migrateLegacyPresetSelections = migrateLegacyPresetSelections;
 
 // --- DOM Initializer & Startup Control ---
+// [Android / LINE内蔵ブラウザ / WebView P0安定化クラス判定 (v1.06.80)]
+function applyEnvironmentStabilityClasses() {
+  try {
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
+    const isAndroid = /Android/i.test(ua);
+    const isLine = /Line/i.test(ua);
+    const isWebView = /wv|WebView/i.test(ua) || (isAndroid && /Version\/\d/i.test(ua));
+
+    if (isAndroid) {
+      document.documentElement.classList.add('env-android');
+    }
+    if (isLine || (isAndroid && isWebView)) {
+      document.documentElement.classList.add('env-line-webview');
+    }
+  } catch (e) {
+    console.warn('[EnvCheck] Environment detection error:', e);
+  }
+}
+window.applyEnvironmentStabilityClasses = applyEnvironmentStabilityClasses;
+
 function initApp() {
+  applyEnvironmentStabilityClasses();
   loadAppSettings();
   loadEnemyHistory();
   loadEnemyPresets();
@@ -7646,7 +7667,12 @@ async function startPipWithMode(targetMode) {
       pipInFlightCancelRequested = false;
       handlePipClosed();
       console.error('[PiP W3C Exception]', err);
-      showToast('小窓の起動に失敗しました: ' + err.message, 'error');
+      const isLineOrWebView = document.documentElement.classList.contains('env-line-webview') || /Line|wv|WebView/i.test(navigator.userAgent || '');
+      if (isLineOrWebView) {
+        showToast('LINE等のアプリ内ブラウザでは小窓が制限されている場合があります。右上のメニューから「他のアプリ(Chrome)で開く」をお試しください', 'warning', 4500);
+      } else {
+        showToast('小窓の起動に失敗しました: ' + err.message, 'error');
+      }
     }
   } else {
     pipInFlightCancelRequested = false;

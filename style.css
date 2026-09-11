@@ -1130,3 +1130,48 @@ button, .btn-game, input, select, .nav-item {
   border-color: #34d399 !important;
   box-shadow: 0 0 16px rgba(16, 185, 129, 0.7) !important;
 }
+
+/* ==========================================================================
+   🤖 Android / LINE内蔵ブラウザ / WebView P0 描画安定化スタイル (v1.06.80)
+   - PC / iOS へは一切影響を与えず、対象環境 (.env-android / .env-line-webview) のみ適用
+   ========================================================================== */
+
+/* 1. Android全般: スクロール時の全画面再ペイント暴走を抑止 */
+html.env-android body {
+  background-attachment: scroll !important;
+}
+
+/* 2. LINE内蔵ブラウザ / Android WebView: レイヤー合成破綻 (Black Tile Bug) の根本防止 */
+html.env-line-webview #main-header,
+html.env-line-webview header.sticky-header {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(8, 12, 20, 0.98) !important;
+}
+
+html.env-line-webview .bottom-nav {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(8, 12, 20, 0.98) !important;
+}
+
+html.env-line-webview .glass-card {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* 3. LINE内蔵ブラウザ / WebView: 体験ツアー中の常時多重キーフレーム描画負荷を停止 */
+html.env-line-webview #onboarding-spotlight-border {
+  animation: none !important;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.8), inset 0 0 8px rgba(0, 240, 255, 0.3) !important;
+}
+
+html.env-line-webview .yan-chan-avatar {
+  animation: none !important;
+}
+
+/* 4. LINE内蔵ブラウザ / WebView: タイトル画面開始ボタンのテクスチャ脱落防止 */
+html.env-line-webview .tap-to-start-btn {
+  animation: none !important;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.9), 0 4px 12px rgba(0, 0, 0, 0.7) !important;
+}
