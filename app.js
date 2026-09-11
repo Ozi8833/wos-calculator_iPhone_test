@@ -4595,10 +4595,10 @@ function renderAllianceMemberList() {
         <span class="font-bold text-cyan-200 truncate">${escapeHtml(m.name)}</span>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
-        <button class="btn-game btn-xs bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 font-mono font-bold px-2 py-1 text-xs hover:scale-105 transition-transform" onclick="openAllianceKeypadModal('${encodeURIComponent(m.id)}')" title="タップして時間を変更">
+        <button class="btn-game btn-xs bg-yellow-950/80 border border-yellow-500/60 text-yellow-300 font-mono font-bold px-2 py-1 text-xs hover:scale-105 transition-transform" onclick="openAllianceKeypadModal('${encodeURIComponent(m.id).replace(/'/g, '%27')}')" title="タップして時間を変更">
           ⏱ ${formatCountdownMMSS(m.marchSec)} <i class="fa-solid fa-pen-to-square text-[10px] ml-0.5"></i>
         </button>
-        <button class="text-red-400 hover:text-red-300 font-bold px-1.5 py-0.5 text-base" onclick="deleteAllianceMember('${encodeURIComponent(m.id)}')">&times;</button>
+        <button class="text-red-400 hover:text-red-300 font-bold px-1.5 py-0.5 text-base" onclick="deleteAllianceMember('${encodeURIComponent(m.id).replace(/'/g, '%27')}')">&times;</button>
       </div>
     `;
     container.appendChild(div);
@@ -7237,6 +7237,7 @@ window.resetOnboardingFlagForDebug = resetOnboardingFlagForDebug;
 
 let pipMode = 'NONE'; // 'NONE' | 'LAUNCH' | 'SYNC'
 let pipState = 'IDLE'; // 'IDLE' | 'TRANSITIONING' | 'PIP' | 'STOPPED'
+let pipInFlightCancelRequested = false; // in-flightレース時の遅延キャンセル要求フラグ
 let pipCanvasStream = null;
 let pipVideoTrack = null;
 let isPipVideoReady = false;
@@ -7345,7 +7346,7 @@ async function safeClosePip() {
   const video = document.getElementById('pip-video');
   if (!video) return;
 
-  if (pipState === 'PIP') {
+  if (pipState === 'PIP' || pipState === 'TRANSITIONING') {
     if (typeof video.webkitSetPresentationMode === 'function') {
       try { video.webkitSetPresentationMode('inline'); } catch (e) {}
     } else if (document.pictureInPictureElement) {
@@ -7545,13 +7546,22 @@ async function startPipWithMode(targetMode) {
   const video = document.getElementById('pip-video');
   if (!video) return;
 
-  // すでに同じモードで起動中なら小窓を閉じる (トグル終了)
+  // ガード①: すでに起動遷移中の場合 (in-flight レース防止)
+  if (pipState === 'TRANSITIONING') {
+    if (pipMode === targetMode) {
+      // 起動中と同じモードのボタンが再度押された = トグルOFF(キャンセル)予約
+      pipInFlightCancelRequested = true;
+    }
+    return; // 二重要求および状態破壊を確実に防止
+  }
+
+  // ガード②: すでに同じモードで起動中なら小窓を閉じる (トグル終了)
   if (pipState === 'PIP' && pipMode === targetMode) {
     await safeClosePip();
     return;
   }
 
-  // モードを即時変更
+  // モードを変更
   pipMode = targetMode;
 
   // 既に小窓が開いている状態なら、絵を描き換えるだけで瞬時に切替完了！(神シームレス)
@@ -7562,18 +7572,26 @@ async function startPipWithMode(targetMode) {
     return;
   }
 
-  // 小窓が閉じていた場合の初回起動処理
-  pipState = 'PIP';
+  // 小窓が閉じていた場合の初回起動処理 (TRANSITIONINGへ移行)
+  pipState = 'TRANSITIONING';
+  pipInFlightCancelRequested = false;
   drawAndPushPipFrame();
 
   // WebKit (iOS Safari) 向けパス
   if (typeof video.webkitSetPresentationMode === 'function') {
     try {
       video.webkitSetPresentationMode('picture-in-picture');
-      updatePipButtonsUi();
-      showToast(targetMode === 'SYNC' ? '時計同期小窓を起動しました！' : '発車カウントダウン小窓を起動しました！', 'success');
+      if (pipInFlightCancelRequested) {
+        pipInFlightCancelRequested = false;
+        await safeClosePip();
+      } else {
+        pipState = 'PIP';
+        updatePipButtonsUi();
+        showToast(targetMode === 'SYNC' ? '時計同期小窓を起動しました！' : '発車カウントダウン小窓を起動しました！', 'success');
+      }
       return;
     } catch (e) {
+      pipInFlightCancelRequested = false;
       handlePipClosed();
       console.error('[PiP WebKit Exception]', e);
     }
@@ -7615,15 +7633,23 @@ async function startPipWithMode(targetMode) {
       drawAndPushPipFrame();
 
       await video.requestPictureInPicture();
-      pipState = 'PIP';
-      updatePipButtonsUi();
-      showToast(targetMode === 'SYNC' ? '時計同期小窓を起動しました！' : '発車カウントダウン小窓を起動しました！', 'success');
+      if (pipInFlightCancelRequested) {
+        // pending 中にトグルOFF(キャンセル)が要求されていた場合、直ちにクリーン終了
+        pipInFlightCancelRequested = false;
+        await safeClosePip();
+      } else {
+        pipState = 'PIP';
+        updatePipButtonsUi();
+        showToast(targetMode === 'SYNC' ? '時計同期小窓を起動しました！' : '発車カウントダウン小窓を起動しました！', 'success');
+      }
     } catch (err) {
+      pipInFlightCancelRequested = false;
       handlePipClosed();
       console.error('[PiP W3C Exception]', err);
       showToast('小窓の起動に失敗しました: ' + err.message, 'error');
     }
   } else {
+    pipInFlightCancelRequested = false;
     handlePipClosed();
     showToast('お使いの端末・ブラウザはPicture-in-Pictureに対応していません', 'warning');
   }
